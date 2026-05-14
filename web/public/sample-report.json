@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0",
+  "toolVersion": "0.1.0",
+  "generatedAt": "2026-05-13T12:00:00Z",
+  "root": "/example/repo",
+  "online": true,
+  "feedVersion": "builtin-2026.05.13",
+  "feedUpdatedAt": "2026-05-13T00:00:00Z",
+  "findings": [
+    {
+      "id": "malicious.npm.axios",
+      "title": "Known compromised Axios release",
+      "severity": "critical",
+      "confidence": "high",
+      "ecosystem": "npm",
+      "package": "axios",
+      "version": "1.14.1",
+      "file": "package-lock.json",
+      "evidence": "axios@1.14.1",
+      "remediation": "Remove the compromised Axios release, clear regenerated dependency artifacts, rotate exposed secrets, and reinstall from a trusted lockfile."
+    },
+    {
+      "id": "risk.github.pull-request-target",
+      "title": "Workflow uses pull_request_target",
+      "severity": "high",
+      "confidence": "high",
+      "ecosystem": "github-actions",
+      "file": ".github/workflows/ci.yml",
+      "evidence": "pull_request_target",
+      "remediation": "Use pull_request for untrusted code, or split privileged release automation into a separate trusted workflow."
+    }
+  ]
+}

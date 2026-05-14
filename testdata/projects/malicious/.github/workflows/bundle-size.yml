@@ -1,0 +1,19 @@
+name: unsafe bundle size
+
+on:
+  pull_request_target:
+
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: actions/cache@v4
+        with:
+          path: .pnpm-store
+          key: deps-${{ github.ref }}
+      - run: pnpm nx run @benchmarks/bundle-size:build

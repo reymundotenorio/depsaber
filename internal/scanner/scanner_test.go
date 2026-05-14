@@ -151,6 +151,57 @@ func TestScanDetectsTanStackOptionalDependencyIOC(t *testing.T) {
 	assertFinding(t, report.Findings, "risk.npm.tanstack-optional-dependency-ioc")
 }
 
+func TestScanTreatsBunLockAsJavaScriptLockfileAndDetectsBunInstall(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "package.json", `{
+  "dependencies": {
+    "left-pad": "1.3.0"
+  }
+}`)
+	writeFile(t, root, "bun.lock", `plain-crypto-js 4.2.1
+`)
+	writeFile(t, root, ".github/workflows/ci.yml", `name: ci
+on:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - run: bun install
+`)
+
+	report, err := New(Options{Root: root, Feed: intel.BuiltinFeed()}).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertNoFinding(t, report.Findings, "risk.npm.missing-lockfile")
+	assertFinding(t, report.Findings, "malicious.npm.plain-crypto-js")
+	assertFinding(t, report.Findings, "risk.github.nondeterministic-install")
+}
+
+func TestScanAllowsFrozenBunInstall(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".github/workflows/ci.yml", `name: ci
+on:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - run: bun install --frozen-lockfile
+`)
+
+	report, err := New(Options{Root: root, Feed: intel.BuiltinFeed()}).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertNoFinding(t, report.Findings, "risk.github.nondeterministic-install")
+}
+
 func TestScanAllowsTrustedTagReleaseWorkflowToWriteContents(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, ".github/workflows/release.yml", `name: Release

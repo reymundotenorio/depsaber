@@ -90,6 +90,7 @@ func (scanner *Scanner) Scan() (report.Report, error) {
 	scanner.scanNPMLock(root, "package-lock.json", addFinding)
 	scanner.scanTextLock(root, "yarn.lock", "npm", addFinding)
 	scanner.scanTextLock(root, "pnpm-lock.yaml", "npm", addFinding)
+	scanner.scanTextLock(root, "bun.lock", "npm", addFinding)
 	scanner.scanRequirements(root, addFinding)
 	scanner.scanPoetryLock(root, addFinding)
 	scanner.scanPTHFiles(root, addFinding)
@@ -133,7 +134,7 @@ func (scanner *Scanner) scanPackageJSON(root string, addFinding func(report.Find
 		})
 		return
 	}
-	if !exists(filepath.Join(root, "package-lock.json")) && !exists(filepath.Join(root, "yarn.lock")) && !exists(filepath.Join(root, "pnpm-lock.yaml")) {
+	if !hasJavaScriptLockfile(root) {
 		addFinding(report.Finding{
 			ID:          "risk.npm.missing-lockfile",
 			Title:       "JavaScript project has no lockfile",
@@ -141,7 +142,7 @@ func (scanner *Scanner) scanPackageJSON(root string, addFinding func(report.Find
 			Confidence:  "high",
 			Ecosystem:   "npm",
 			File:        rel,
-			Evidence:    "package.json exists without package-lock.json, yarn.lock, or pnpm-lock.yaml",
+			Evidence:    "package.json exists without package-lock.json, yarn.lock, pnpm-lock.yaml, bun.lock, or bun.lockb",
 			Remediation: "Commit a package-manager lockfile and use deterministic installs in CI.",
 		})
 	}
@@ -397,7 +398,7 @@ func (scanner *Scanner) scanWorkflowContent(root, path, content string, addFindi
 			Remediation: "Separate trusted and untrusted cache scopes and never restore untrusted dependency caches in privileged jobs.",
 		})
 	}
-	if strings.Contains(lower, "npm install") || strings.Contains(lower, "yarn install\n") || strings.Contains(lower, "pnpm install\n") || (strings.Contains(lower, "pip install -r") && !strings.Contains(lower, "--require-hashes")) {
+	if hasNondeterministicInstall(lower) {
 		addFinding(report.Finding{
 			ID:          "risk.github.nondeterministic-install",
 			Title:       "Workflow uses a non-deterministic install command",
@@ -406,7 +407,7 @@ func (scanner *Scanner) scanWorkflowContent(root, path, content string, addFindi
 			Ecosystem:   "github-actions",
 			File:        rel,
 			Evidence:    "install command without frozen lockfile or hash enforcement",
-			Remediation: "Use npm ci, yarn install --immutable, pnpm install --frozen-lockfile, or pip install --require-hashes.",
+			Remediation: "Use npm ci, yarn install --immutable, pnpm install --frozen-lockfile, bun install --frozen-lockfile, or pip install --require-hashes.",
 		})
 	}
 }
@@ -501,6 +502,23 @@ func isTrustedReleaseWorkflow(content string) bool {
 	return strings.Contains(content, "tags:") ||
 		strings.Contains(content, "release:") ||
 		strings.Contains(content, "gh release create")
+}
+
+func hasNondeterministicInstall(content string) bool {
+	return strings.Contains(content, "npm install") ||
+		strings.Contains(content, "yarn install\n") ||
+		strings.Contains(content, "pnpm install\n") ||
+		(strings.Contains(content, "bun install") && !strings.Contains(content, "bun install --frozen-lockfile")) ||
+		(strings.Contains(content, "pip install -r") && !strings.Contains(content, "--require-hashes"))
+}
+
+func hasJavaScriptLockfile(root string) bool {
+	for _, name := range []string{"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"} {
+		if exists(filepath.Join(root, name)) {
+			return true
+		}
+	}
+	return false
 }
 
 func severityRank(severity report.Severity) int {

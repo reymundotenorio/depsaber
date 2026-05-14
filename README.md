@@ -41,12 +41,12 @@ Daily automation never runs `clean` or `harden --apply` automatically in v1.
 
 MVP v1 covers:
 
-- npm, Yarn, pnpm, and pip projects.
+- npm, Yarn, pnpm, Bun, and pip projects.
 - GitHub Actions workflow risk.
 - Generic CI bootstrap templates for GitLab, CircleCI, Azure, and shell-based CI.
 - Daily local schedule templates for launchd, cron, systemd, and Windows Task Scheduler.
 - Embedded intelligence for compromised Axios, `plain-crypto-js`, TanStack Mini Shai-Hulud indicators, `mistralai`, `guardrails-ai`, and LiteLLM releases.
-- Behavioral detection for lifecycle downloaders, Python `.pth` execution, floating dependency ranges, missing lockfiles, unpinned actions, unsafe `pull_request_target`, privileged untrusted checkout, broad permissions, unsafe OIDC, cache poisoning, and non-deterministic CI installs.
+- Behavioral detection for lifecycle downloaders, Python `.pth` execution, floating dependency ranges, missing lockfiles including Bun locks, unpinned actions, unsafe `pull_request_target`, privileged untrusted checkout, broad permissions, unsafe OIDC, cache poisoning, and non-deterministic CI installs.
 
 ## Build
 
@@ -58,7 +58,7 @@ Build the web report viewer:
 
 ```bash
 cd web
-npm install
+npm ci --ignore-scripts
 npm run build
 ```
 
@@ -180,18 +180,20 @@ depsaber harden . --apply --policy standard
 
 Standard policy writes practical defaults:
 
-- npm `.npmrc`: `min-release-age=3`, `audit=true`
-- Yarn `.yarnrc.yml`: `npmMinimalAgeGate: "3d"`, `checksumBehavior: "throw"`, `enableHardenedMode: true`
-- pnpm `pnpm-workspace.yaml`: `minimumReleaseAge: 4320`, `blockExoticSubdeps: true`
+- npm `.npmrc`: `min-release-age=3`, `audit=true`, `ignore-scripts=true`
+- Yarn `.yarnrc.yml`: `npmMinimalAgeGate: "3d"`, `checksumBehavior: "throw"`, `enableHardenedMode: true`, `enableScripts: false`
+- pnpm `pnpm-workspace.yaml`: `minimumReleaseAge: 4320`, `blockExoticSubdeps: true`, `strictDepBuilds: true`
+- Bun `bunfig.toml`: `[install] minimumReleaseAge = 259200`, `ignoreScripts = true`
 - pip guidance: `.depsaber/pip-secure-installs.md` with `--require-hashes`, pinned requirements, and binary-only guidance
 
-Strict policy adds stronger controls:
+Strict policy increases the waiting period and adds trust downgrade controls:
 
-- npm: `ignore-scripts=true`
-- Yarn: `enableScripts: false`
-- pnpm: `strictDepBuilds: true`, `trustPolicy: no-downgrade`, and `minimumReleaseAge: 10080`
+- npm: `min-release-age=7`
+- Yarn: `npmMinimalAgeGate: "7d"`
+- pnpm: `minimumReleaseAge: 10080`, `trustPolicy: no-downgrade`
+- Bun: `minimumReleaseAge = 604800`
 
-The unit mismatch matters: npm `min-release-age` is days, pnpm `minimumReleaseAge` is minutes, and Yarn accepts duration strings such as `"3d"` in `.yarnrc.yml`.
+The unit mismatch matters: npm `min-release-age` is days, pnpm `minimumReleaseAge` is minutes, Bun `minimumReleaseAge` is seconds, and Yarn accepts duration strings such as `"3d"` in `.yarnrc.yml`. pnpm 11 already defaults to a 1440-minute age gate plus safer dependency build defaults; DepSaber standard is stricter at 4320 minutes.
 
 ## Cleanup
 
@@ -258,7 +260,7 @@ cd web && npm test && npm run build
 ## Limitations
 
 - Online registry checks are intentionally opt-in with `--online`.
-- Online checks currently cover npm and PyPI publish-age metadata.
+- Online checks currently cover npm and PyPI publish-age metadata. Bun support is local in v1: lockfile scanning, CI install detection, and `bunfig.toml` hardening.
 - MVP v1 does not replace endpoint detection, secret scanning, SBOM governance, or organization-level policy enforcement.
 - Cleanup is project-scoped. If malware executed, assume host and credentials may be compromised until proven otherwise.
 - External intelligence feeds require Ed25519 signatures; v1 includes source material and verification support but not a hosted feed service.
@@ -273,4 +275,5 @@ cd web && npm test && npm run build
 - npm audit and signatures: https://docs.npmjs.com/cli/v11/commands/npm-audit/
 - npm config `min-release-age`: https://docs.npmjs.com/cli/v11/using-npm/config/
 - Yarn security settings: https://yarnpkg.com/features/security
+- Bun install security settings: https://bun.sh/docs/pm/cli/install
 - pip secure installs: https://pip.pypa.io/en/stable/topics/secure-installs/

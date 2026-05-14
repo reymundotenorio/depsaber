@@ -30,6 +30,7 @@ func TestApplyWritesPackageManagerHardeningWithBackup(t *testing.T) {
 	writeFile(t, root, ".npmrc", "audit=true\n")
 	writeFile(t, root, "yarn.lock", "# yarn lockfile\n")
 	writeFile(t, root, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n")
+	writeFile(t, root, "bun.lock", "# bun lockfile\n")
 	writeFile(t, root, "requirements.txt", "requests==2.32.0\n")
 
 	result, err := New(Options{Root: root, Policy: "standard", Apply: true}).Run()
@@ -41,10 +42,15 @@ func TestApplyWritesPackageManagerHardeningWithBackup(t *testing.T) {
 	}
 
 	assertFileContains(t, filepath.Join(root, ".npmrc"), "min-release-age=3")
+	assertFileContains(t, filepath.Join(root, ".npmrc"), "ignore-scripts=true")
 	assertFileContains(t, filepath.Join(root, ".yarnrc.yml"), `npmMinimalAgeGate: "3d"`)
 	assertFileContains(t, filepath.Join(root, ".yarnrc.yml"), `checksumBehavior: "throw"`)
+	assertFileContains(t, filepath.Join(root, ".yarnrc.yml"), "enableScripts: false")
 	assertFileContains(t, filepath.Join(root, "pnpm-workspace.yaml"), "minimumReleaseAge: 4320")
 	assertFileContains(t, filepath.Join(root, "pnpm-workspace.yaml"), "blockExoticSubdeps: true")
+	assertFileContains(t, filepath.Join(root, "pnpm-workspace.yaml"), "strictDepBuilds: true")
+	assertFileContains(t, filepath.Join(root, "bunfig.toml"), "minimumReleaseAge = 259200")
+	assertFileContains(t, filepath.Join(root, "bunfig.toml"), "ignoreScripts = true")
 	assertFileContains(t, filepath.Join(root, ".depsaber", "pip-secure-installs.md"), "Use `--require-hashes`")
 
 	entries, err := os.ReadDir(filepath.Join(root, ".depsaber", "backups"))
@@ -61,6 +67,7 @@ func TestStrictPolicyAddsScriptAndTrustControls(t *testing.T) {
 	writeFile(t, root, "package.json", `{"dependencies":{"axios":"^1.6.0"}}`)
 	writeFile(t, root, "yarn.lock", "# yarn lockfile\n")
 	writeFile(t, root, "pnpm-lock.yaml", "lockfileVersion: '9.0'\n")
+	writeFile(t, root, "bun.lock", "# bun lockfile\n")
 
 	if _, err := New(Options{Root: root, Policy: "strict", Apply: true}).Run(); err != nil {
 		t.Fatal(err)
@@ -72,6 +79,7 @@ func TestStrictPolicyAddsScriptAndTrustControls(t *testing.T) {
 	assertFileContains(t, filepath.Join(root, ".yarnrc.yml"), "enableScripts: false")
 	assertFileContains(t, filepath.Join(root, "pnpm-workspace.yaml"), "minimumReleaseAge: 10080")
 	assertFileContains(t, filepath.Join(root, "pnpm-workspace.yaml"), "trustPolicy: no-downgrade")
+	assertFileContains(t, filepath.Join(root, "bunfig.toml"), "minimumReleaseAge = 604800")
 }
 
 func writeFile(t *testing.T, root, name, content string) {

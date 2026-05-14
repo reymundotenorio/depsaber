@@ -29,6 +29,7 @@ type profile struct {
 	NPMDays     int
 	YarnAge     string
 	PNPMMinutes int
+	BUNSeconds  int
 	Strict      bool
 }
 
@@ -86,7 +87,16 @@ func (hardener *Hardener) plan(root string, profile profile) []report.Action {
 			Title:       "Set pnpm minimum release age",
 			File:        "pnpm-workspace.yaml",
 			Mode:        actionMode(hardener.options.Apply),
-			Description: fmt.Sprintf("Add minimumReleaseAge: %d and block exotic transitive dependencies for pnpm projects.", profile.PNPMMinutes),
+			Description: fmt.Sprintf("Add minimumReleaseAge: %d, block exotic transitive dependencies, and require explicit dependency build approval for pnpm projects.", profile.PNPMMinutes),
+		})
+	}
+	if hasBunProject(root) {
+		actions = append(actions, report.Action{
+			ID:          "harden.bun.minimum-release-age",
+			Title:       "Set Bun minimum release age and block install scripts",
+			File:        "bunfig.toml",
+			Mode:        actionMode(hardener.options.Apply),
+			Description: fmt.Sprintf("Add install.minimumReleaseAge = %d seconds and ignoreScripts = true for Bun projects.", profile.BUNSeconds),
 		})
 	}
 	if hasPythonRequirements(root) {
@@ -104,30 +114,32 @@ func (hardener *Hardener) plan(root string, profile profile) []report.Action {
 func (hardener *Hardener) apply(root string, action report.Action, profile profile) error {
 	switch action.ID {
 	case "harden.npm.min-release-age":
-		lines := []string{fmt.Sprintf("min-release-age=%d", profile.NPMDays), "audit=true"}
-		if profile.Strict {
-			lines = append(lines, "ignore-scripts=true")
-		}
+		lines := []string{fmt.Sprintf("min-release-age=%d", profile.NPMDays), "audit=true", "ignore-scripts=true"}
 		return upsertConfigLines(root, action.File, lines)
 	case "harden.yarn.safe-installs":
 		lines := []string{
 			fmt.Sprintf(`npmMinimalAgeGate: "%s"`, profile.YarnAge),
 			`checksumBehavior: "throw"`,
 			"enableHardenedMode: true",
-		}
-		if profile.Strict {
-			lines = append(lines, "enableScripts: false")
+			"enableScripts: false",
 		}
 		return upsertConfigLines(root, action.File, lines)
 	case "harden.pnpm.minimum-release-age":
 		lines := []string{
 			fmt.Sprintf("minimumReleaseAge: %d", profile.PNPMMinutes),
 			"blockExoticSubdeps: true",
+			"strictDepBuilds: true",
 		}
 		if profile.Strict {
-			lines = append(lines, "strictDepBuilds: true", "trustPolicy: no-downgrade")
+			lines = append(lines, "trustPolicy: no-downgrade")
 		}
 		return upsertConfigLines(root, action.File, lines)
+	case "harden.bun.minimum-release-age":
+		lines := []string{
+			fmt.Sprintf("minimumReleaseAge = %d", profile.BUNSeconds),
+			"ignoreScripts = true",
+		}
+		return upsertBunInstallConfig(root, action.File, lines)
 	case "harden.pip.hash-guidance":
 		return writeWithBackup(root, action.File, []byte("# pip secure install guidance\n\n"+
 			"Use `--require-hashes` for production installs after generating a fully pinned requirements file. Prefer `--only-binary :all:` when your project can avoid source builds.\n\n"+
@@ -171,6 +183,56 @@ func upsertConfigLines(root, rel string, lines []string) error {
 	return writeWithBackup(root, rel, []byte(next))
 }
 
+func upsertBunInstallConfig(root, rel string, lines []string) error {
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	content := ""
+	if current, err := os.ReadFile(path); err == nil {
+		content = strings.ReplaceAll(string(current), "\r\n", "\n")
+	}
+	keys := map[string]bool{}
+	for _, line := range lines {
+		if key := configKey(line); key != "" {
+			keys[key] = true
+		}
+	}
+	installHeader := "[install]"
+	if strings.TrimSpace(content) == "" {
+		return writeWithBackup(root, rel, []byte(installHeader+"\n"+strings.Join(lines, "\n")+"\n"))
+	}
+	parts := strings.Split(content, "\n")
+	sectionStart := -1
+	sectionEnd := len(parts)
+	for index, line := range parts {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == installHeader {
+			sectionStart = index
+			continue
+		}
+		if sectionStart >= 0 && index > sectionStart && strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			sectionEnd = index
+			break
+		}
+	}
+	var next []string
+	if sectionStart == -1 {
+		next = append(next, strings.TrimRight(content, "\n"))
+		next = append(next, "", installHeader)
+		next = append(next, lines...)
+	} else {
+		next = append(next, parts[:sectionStart+1]...)
+		for _, line := range parts[sectionStart+1 : sectionEnd] {
+			if key := configKey(line); key != "" && keys[key] {
+				continue
+			}
+			next = append(next, line)
+		}
+		next = append(next, lines...)
+		next = append(next, parts[sectionEnd:]...)
+	}
+	output := strings.TrimRight(strings.Join(next, "\n"), "\n") + "\n"
+	return writeWithBackup(root, rel, []byte(output))
+}
+
 func writeWithBackup(root, rel string, content []byte) error {
 	path := filepath.Join(root, filepath.FromSlash(rel))
 	if err := backupFile(root, rel); err != nil {
@@ -199,6 +261,10 @@ func backupFile(root, rel string) error {
 	return os.WriteFile(destination, content, 0o644)
 }
 
+func hasBunProject(root string) bool {
+	return exists(filepath.Join(root, "bun.lock")) || exists(filepath.Join(root, "bun.lockb")) || exists(filepath.Join(root, "bunfig.toml"))
+}
+
 func hasPythonRequirements(root string) bool {
 	matches, _ := filepath.Glob(filepath.Join(root, "requirements*.txt"))
 	return len(matches) > 0 || exists(filepath.Join(root, "pyproject.toml")) || exists(filepath.Join(root, "poetry.lock")) || exists(filepath.Join(root, "uv.lock"))
@@ -219,9 +285,9 @@ func actionMode(apply bool) string {
 func hardeningProfile(policy string) (profile, error) {
 	switch strings.ToLower(policy) {
 	case "standard":
-		return profile{Name: "standard", NPMDays: 3, YarnAge: "3d", PNPMMinutes: 4320}, nil
+		return profile{Name: "standard", NPMDays: 3, YarnAge: "3d", PNPMMinutes: 4320, BUNSeconds: 259200}, nil
 	case "strict":
-		return profile{Name: "strict", NPMDays: 7, YarnAge: "7d", PNPMMinutes: 10080, Strict: true}, nil
+		return profile{Name: "strict", NPMDays: 7, YarnAge: "7d", PNPMMinutes: 10080, BUNSeconds: 604800, Strict: true}, nil
 	default:
 		return profile{}, fmt.Errorf("unsupported hardening policy: %s", policy)
 	}

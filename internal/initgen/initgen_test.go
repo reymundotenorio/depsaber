@@ -43,6 +43,28 @@ func TestGitHubCITemplateUsesSafeDefaults(t *testing.T) {
 	}
 }
 
+func TestCITemplatesIncludeDeterministicInstallExamples(t *testing.T) {
+	for _, target := range []string{"github", "gitlab", "circleci", "azure", "generic"} {
+		t.Run(target, func(t *testing.T) {
+			template, err := GenerateCI(CIOptions{Target: target})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, required := range []string{
+				"npm ci --ignore-scripts",
+				"pnpm install --frozen-lockfile",
+				"yarn install --immutable",
+				"bun ci",
+				"python -m pip install --require-hashes",
+			} {
+				if !strings.Contains(template.Content, required) {
+					t.Fatalf("expected %s template to include %q, got:\n%s", target, required, template.Content)
+				}
+			}
+		})
+	}
+}
+
 func TestGenericCITemplateWorksOutsideGitHub(t *testing.T) {
 	template, err := GenerateCI(CIOptions{Target: "generic"})
 	if err != nil {

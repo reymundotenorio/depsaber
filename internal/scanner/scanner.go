@@ -238,7 +238,7 @@ func (scanner *Scanner) scanTextLock(root, name, ecosystem string, addFinding fu
 			continue
 		}
 		for _, version := range rule.Versions {
-			if strings.Contains(text, rule.PackageName) && strings.Contains(text, version) {
+			if textLockContainsPackageVersion(text, rule.PackageName, version) {
 				scanner.addKnownPackageFinding(ecosystem, rule.PackageName, version, name, addFinding)
 			}
 		}
@@ -407,7 +407,7 @@ func (scanner *Scanner) scanWorkflowContent(root, path, content string, addFindi
 			Ecosystem:   "github-actions",
 			File:        rel,
 			Evidence:    "install command without frozen lockfile or hash enforcement",
-			Remediation: "Use npm ci, yarn install --immutable, pnpm install --frozen-lockfile, bun install --frozen-lockfile, or pip install --require-hashes.",
+			Remediation: "Use npm ci, yarn install --immutable, pnpm install --frozen-lockfile, bun ci, bun install --frozen-lockfile, or pip install --require-hashes.",
 		})
 	}
 }
@@ -510,6 +510,33 @@ func hasNondeterministicInstall(content string) bool {
 		strings.Contains(content, "pnpm install\n") ||
 		(strings.Contains(content, "bun install") && !strings.Contains(content, "bun install --frozen-lockfile")) ||
 		(strings.Contains(content, "pip install -r") && !strings.Contains(content, "--require-hashes"))
+}
+
+func textLockContainsPackageVersion(text, packageName, version string) bool {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	for _, line := range strings.Split(normalized, "\n") {
+		if lockCandidateContainsPackageVersion(line, packageName, version) {
+			return true
+		}
+	}
+	for _, entry := range regexp.MustCompile(`\n\s*\n`).Split(normalized, -1) {
+		if lockCandidateContainsPackageVersion(entry, packageName, version) {
+			return true
+		}
+	}
+	return false
+}
+
+func lockCandidateContainsPackageVersion(candidate, packageName, version string) bool {
+	lower := strings.ToLower(candidate)
+	return lockCandidateContainsPackage(lower, strings.ToLower(packageName)) && strings.Contains(lower, strings.ToLower(version))
+}
+
+func lockCandidateContainsPackage(candidate, packageName string) bool {
+	if strings.HasSuffix(packageName, "/*") {
+		return strings.Contains(candidate, strings.TrimSuffix(packageName, "*"))
+	}
+	return strings.Contains(candidate, packageName)
 }
 
 func hasJavaScriptLockfile(root string) bool {

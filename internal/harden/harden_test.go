@@ -62,6 +62,23 @@ func TestApplyWritesPackageManagerHardeningWithBackup(t *testing.T) {
 	}
 }
 
+func TestApplyHardensPackageManagerConfigFixture(t *testing.T) {
+	root := t.TempDir()
+	copyFixture(t, root, filepath.Join("..", "..", "testdata", "projects", "package-manager-configs"))
+
+	if _, err := New(Options{Root: root, Policy: "standard", Apply: true}).Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertFileContains(t, filepath.Join(root, ".npmrc"), "min-release-age=3")
+	assertFileContains(t, filepath.Join(root, ".npmrc"), "ignore-scripts=true")
+	assertFileContains(t, filepath.Join(root, ".yarnrc.yml"), `npmMinimalAgeGate: "3d"`)
+	assertFileContains(t, filepath.Join(root, "pnpm-workspace.yaml"), "minimumReleaseAge: 4320")
+	assertFileContains(t, filepath.Join(root, "bunfig.toml"), "[install]")
+	assertFileContains(t, filepath.Join(root, "bunfig.toml"), "minimumReleaseAge = 259200")
+	assertFileContains(t, filepath.Join(root, "bunfig.toml"), "ignoreScripts = true")
+}
+
 func TestStrictPolicyAddsScriptAndTrustControls(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "package.json", `{"dependencies":{"axios":"^1.6.0"}}`)
@@ -89,6 +106,36 @@ func writeFile(t *testing.T, root, name, content string) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func copyFixture(t *testing.T, root, fixture string) {
+	t.Helper()
+	if err := filepath.WalkDir(fixture, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(fixture, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(root, rel)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, content, 0o644)
+	}); err != nil {
 		t.Fatal(err)
 	}
 }

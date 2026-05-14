@@ -21,6 +21,13 @@ type CIOptions struct {
 	Target string
 }
 
+const deterministicInstallExamples = `Optional deterministic install examples for project jobs:
+- npm ci --ignore-scripts
+- pnpm install --frozen-lockfile
+- yarn install --immutable
+- bun ci
+- python -m pip install --require-hashes --only-binary :all: -r requirements.txt`
+
 func GenerateSchedule(options ScheduleOptions) (Template, error) {
 	if options.ProjectPath == "" {
 		options.ProjectPath = "."
@@ -103,7 +110,7 @@ WantedBy=timers.target
 func GenerateCI(options CIOptions) (Template, error) {
 	switch options.Target {
 	case "github":
-		return Template{Path: ".github/workflows/depsaber.yml", Content: `name: DepSaber
+		return Template{Path: ".github/workflows/depsaber.yml", Content: fmt.Sprintf(`name: DepSaber
 
 on:
   pull_request:
@@ -127,10 +134,12 @@ jobs:
           mkdir -p .depsaber
           depsaber update
           depsaber scan . --online --format json --fail-on high > .depsaber/report.json
-`}, nil
+%s
+`, shellCommentLines(deterministicInstallExamples, "          # "))}, nil
 	case "gitlab":
-		return Template{Path: ".gitlab-ci.yml", Content: `depsaber:
+		return Template{Path: ".gitlab-ci.yml", Content: fmt.Sprintf(`depsaber:
   stage: test
+%s
   script:
     - depsaber update
     - depsaber scan . --online --format json --fail-on high > .depsaber/report.json
@@ -138,15 +147,16 @@ jobs:
     when: always
     paths:
       - .depsaber/report.json
-`}, nil
+`, shellCommentLines(deterministicInstallExamples, "  # "))}, nil
 	case "circleci":
-		return Template{Path: ".circleci/config.yml", Content: `version: 2.1
+		return Template{Path: ".circleci/config.yml", Content: fmt.Sprintf(`version: 2.1
 jobs:
   depsaber:
     docker:
       - image: cimg/base:stable
     steps:
       - checkout
+%s
       - run: mkdir -p .depsaber
       - run: depsaber update
       - run: depsaber scan . --online --format json --fail-on high > .depsaber/report.json
@@ -154,9 +164,9 @@ workflows:
   depsaber:
     jobs:
       - depsaber
-`}, nil
+`, shellCommentLines(deterministicInstallExamples, "      # "))}, nil
 	case "azure":
-		return Template{Path: "azure-pipelines.yml", Content: `trigger:
+		return Template{Path: "azure-pipelines.yml", Content: fmt.Sprintf(`trigger:
   - main
 
 schedules:
@@ -166,24 +176,35 @@ schedules:
       include:
         - main
 
+%s
 steps:
   - script: |
       mkdir -p .depsaber
       depsaber update
       depsaber scan . --online --format json --fail-on high > .depsaber/report.json
     displayName: Run DepSaber
-`}, nil
+`, shellCommentLines(deterministicInstallExamples, "# "))}, nil
 	case "generic":
-		return Template{Path: ".depsaber/ci/depsaber-scan.sh", Content: `#!/usr/bin/env sh
+		return Template{Path: ".depsaber/ci/depsaber-scan.sh", Content: fmt.Sprintf(`#!/usr/bin/env sh
 set -eu
 
 mkdir -p .depsaber
 depsaber update
 depsaber scan . --online --format json --fail-on high > .depsaber/report.json
-`}, nil
+
+%s
+`, shellCommentLines(deterministicInstallExamples, "# "))}, nil
 	default:
 		return Template{}, fmt.Errorf("unsupported CI target: %s", options.Target)
 	}
+}
+
+func shellCommentLines(value, prefix string) string {
+	lines := strings.Split(value, "\n")
+	for index, line := range lines {
+		lines[index] = prefix + line
+	}
+	return strings.Join(lines, "\n")
 }
 
 func splitTime(value string) (string, string, error) {

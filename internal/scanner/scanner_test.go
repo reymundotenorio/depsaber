@@ -181,6 +181,25 @@ jobs:
 	assertFinding(t, report.Findings, "risk.github.nondeterministic-install")
 }
 
+func TestScanTextLockRequiresPackageAndVersionInSameEntry(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "yarn.lock", `"axios@npm:^1.12.2":
+  version: 1.12.2
+  resolution: "axios@npm:1.12.2"
+
+"other-package@npm:^1.0.0":
+  version: 1.14.1
+  resolution: "other-package@npm:1.14.1"
+`)
+
+	report, err := New(Options{Root: root, Feed: intel.BuiltinFeed()}).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertNoFinding(t, report.Findings, "malicious.npm.axios")
+}
+
 func TestScanAllowsFrozenBunInstall(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, ".github/workflows/ci.yml", `name: ci
@@ -200,6 +219,19 @@ jobs:
 	}
 
 	assertNoFinding(t, report.Findings, "risk.github.nondeterministic-install")
+}
+
+func TestScanBunFixtureCoversLockfileAndCIInstall(t *testing.T) {
+	root := filepath.Join("..", "..", "testdata", "projects", "bun-risky")
+
+	report, err := New(Options{Root: root, Feed: intel.BuiltinFeed()}).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertNoFinding(t, report.Findings, "risk.npm.missing-lockfile")
+	assertFinding(t, report.Findings, "malicious.npm.plain-crypto-js")
+	assertFinding(t, report.Findings, "risk.github.nondeterministic-install")
 }
 
 func TestScanAllowsTrustedTagReleaseWorkflowToWriteContents(t *testing.T) {

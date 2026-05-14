@@ -1,0 +1,7 @@
+{
+  "name": "bun-risky-fixture",
+  "private": true,
+  "dependencies": {
+    "plain-crypto-js": "4.2.1"
+  }
+}

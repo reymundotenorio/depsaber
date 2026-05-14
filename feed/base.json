@@ -1,0 +1,69 @@
+{
+  "version": "builtin-2026.05.13",
+  "issuedAt": "2026-05-13T00:00:00Z",
+  "expiresAt": "2027-05-13T00:00:00Z",
+  "rules": [
+    {
+      "id": "malicious.npm.axios",
+      "ecosystem": "npm",
+      "package": "axios",
+      "versions": ["1.14.1", "0.30.4"],
+      "severity": "critical",
+      "title": "Known compromised Axios release",
+      "remediation": "Remove the compromised Axios release, clear regenerated dependency artifacts, rotate exposed secrets, and reinstall from a trusted lockfile.",
+      "references": ["https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/"]
+    },
+    {
+      "id": "malicious.npm.plain-crypto-js",
+      "ecosystem": "npm",
+      "package": "plain-crypto-js",
+      "versions": ["4.2.1"],
+      "severity": "critical",
+      "title": "Known malicious plain-crypto-js release",
+      "remediation": "Remove the malicious release, inspect lifecycle execution logs, and rotate credentials available to the install environment.",
+      "references": ["https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/"]
+    },
+    {
+      "id": "malicious.npm.tanstack-mini-shai-hulud",
+      "ecosystem": "npm",
+      "package": "@tanstack/*",
+      "versions": ["1.169.5", "1.169.8", "1.169.23", "1.169.26"],
+      "severity": "critical",
+      "title": "Known TanStack Mini Shai-Hulud affected release",
+      "remediation": "Remove the affected @tanstack release, reinstall from a clean lockfile, review CI install logs, and rotate credentials available to the developer or CI environment.",
+      "references": [
+        "https://github.com/TanStack/router/security/advisories/GHSA-g7cv-rxg3-hmpx",
+        "https://tanstack.com/blog/npm-supply-chain-compromise-postmortem"
+      ]
+    },
+    {
+      "id": "malicious.pypi.mistralai",
+      "ecosystem": "pip",
+      "package": "mistralai",
+      "versions": ["2.4.6"],
+      "severity": "critical",
+      "title": "Known malicious mistralai release",
+      "remediation": "Remove the compromised release, rebuild the virtual environment, and rotate credentials exposed during import or install.",
+      "references": ["https://safedep.io/mass-npm-supply-chain-attack-tanstack-mistral/"]
+    },
+    {
+      "id": "malicious.pypi.guardrails-ai",
+      "ecosystem": "pip",
+      "package": "guardrails-ai",
+      "versions": ["0.10.1"],
+      "severity": "critical",
+      "title": "Known malicious guardrails-ai release",
+      "remediation": "Remove the compromised release, rebuild the virtual environment, and rotate credentials exposed during import or install.",
+      "references": ["https://safedep.io/mass-npm-supply-chain-attack-tanstack-mistral/"]
+    },
+    {
+      "id": "malicious.pypi.litellm",
+      "ecosystem": "pip",
+      "package": "litellm",
+      "versions": ["1.82.7", "1.82.8"],
+      "severity": "critical",
+      "title": "Known compromised LiteLLM release",
+      "remediation": "Remove the compromised release, rebuild the virtual environment, and rotate credentials exposed during import or install."
+    }
+  ]
+}

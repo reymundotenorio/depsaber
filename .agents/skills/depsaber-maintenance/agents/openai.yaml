@@ -1,0 +1,4 @@
+interface:
+  display_name: "DepSaber Maintenance"
+  short_description: "Maintain DepSaber safely"
+  default_prompt: "Use this skill when modifying DepSaber scanner, hardening, cleanup, init templates, web report viewer, workflows, docs, tests, or release/feed automation."

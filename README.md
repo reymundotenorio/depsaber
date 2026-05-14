@@ -44,6 +44,7 @@ MVP v1 covers:
 - npm, Yarn, pnpm, Bun, and pip projects.
 - GitHub Actions workflow risk.
 - Generic CI bootstrap templates for GitLab, CircleCI, Azure, and shell-based CI.
+- Deterministic install examples for npm, Yarn, pnpm, Bun, and pip inside generated CI templates.
 - Daily local schedule templates for launchd, cron, systemd, and Windows Task Scheduler.
 - Embedded intelligence for compromised Axios, `plain-crypto-js`, TanStack Mini Shai-Hulud indicators, `mistralai`, `guardrails-ai`, and LiteLLM releases.
 - Behavioral detection for lifecycle downloaders, Python `.pth` execution, floating dependency ranges, missing lockfiles including Bun locks, unpinned actions, unsafe `pull_request_target`, privileged untrusted checkout, broad permissions, unsafe OIDC, cache poisoning, and non-deterministic CI installs.
@@ -163,6 +164,14 @@ depsaber init ci --target generic --apply
 
 The GitHub template uses `pull_request`, not `pull_request_target`; defaults to `contents: read`; avoids `id-token: write`; sets `persist-credentials: false`; and pins checkout to a full commit SHA.
 
+Generated CI templates also include commented deterministic install examples for project jobs:
+
+- `npm ci --ignore-scripts`
+- `pnpm install --frozen-lockfile`
+- `yarn install --immutable`
+- `bun ci`
+- `python -m pip install --require-hashes --only-binary :all: -r requirements.txt`
+
 DepSaber also ships its own GitHub workflows:
 
 - `pages.yml` deploys the static report viewer to GitHub Pages.
@@ -213,6 +222,15 @@ For local development:
 go build -o bin/depsaber ./cmd/depsaber
 ```
 
+Install a local `depsaber` command on your `PATH`:
+
+```bash
+./scripts/install-local.sh
+depsaber scan . --format text
+```
+
+By default the installer writes to `$HOME/.local/bin/depsaber`. Set `DEPSABER_INSTALL_DIR` to choose a different install directory.
+
 For releases, push a semantic tag:
 
 ```bash
@@ -255,6 +273,25 @@ DepSaber rejects unsigned external feeds and expired signed feeds. Keep private 
 ```bash
 GOCACHE="$(pwd)/.cache/go-build" go test ./...
 cd web && npm test && npm run build
+```
+
+## MVP Acceptance
+
+Before tagging an MVP release, run the full verification suite and smoke test the built binary against at least one real multi-project workspace:
+
+```bash
+HOME=/private/tmp GOTELEMETRY=off GOCACHE=/private/tmp/depsaber-go-cache go test ./...
+HOME=/private/tmp GOTELEMETRY=off GOCACHE=/private/tmp/depsaber-go-cache go build -o /private/tmp/depsaber ./cmd/depsaber
+cd web && npm test && npm run build && DEPLOY_TARGET=github-pages npm run build
+git diff --check
+```
+
+Example read-only workspace smoke test:
+
+```bash
+/private/tmp/depsaber scan /path/to/frontend --format json > /private/tmp/depsaber-frontend.json
+/private/tmp/depsaber scan /path/to/backend --format json > /private/tmp/depsaber-backend.json
+/private/tmp/depsaber scan /path/to/playwright --format json > /private/tmp/depsaber-playwright.json
 ```
 
 ## Limitations

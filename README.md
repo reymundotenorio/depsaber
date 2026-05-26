@@ -24,14 +24,21 @@ DepSaber does not try to replace mature scanners such as Socket, OSV-Scanner, Sa
 - Local project cleanup with mandatory backups.
 - Package-manager hardening templates that developers can apply immediately.
 - CI trust-boundary checks inspired by recent GitHub Actions attack chains.
+- Baseline and delta mode so CI can block new high-priority findings without failing on accepted legacy debt.
 - Daily local and CI routines that never mutate a project automatically.
 - A static web report viewer that can be shared without uploading source code.
+
+## How DepSaber Is Different
+
+Endpoint inventory scanners answer which developer machines currently show exposure to known packages, extensions, or tool metadata. DepSaber is intentionally narrower and more actionable: it works from an active repo or workspace, compares current findings to an accepted baseline, and helps teams decide what should block CI, what should be hardened, and what changed since the last accepted state.
+
+Use DepSaber when you want a local repo guardrail: scan, baseline, report, harden package-manager settings, generate safer CI and schedule templates, and keep cleanup behind explicit review.
 
 ## Safety Model
 
 `depsaber scan` is read-only.
 
-`depsaber harden`, `depsaber clean`, and `depsaber init` require `--apply` before writing files. Apply mode creates backups before changing existing project files.
+`depsaber baseline`, `depsaber harden`, `depsaber clean`, and `depsaber init` require `--apply` before writing files. Apply mode creates backups before changing existing project files when existing files are modified.
 
 DepSaber can clean project-level artifacts such as dependency folders, package-manager stores, generated caches, and virtual environments. It cannot guarantee full host compromise remediation after malware executed on a machine. If a credential stealer, RAT, or import-time payload may have run, rebuild the environment and rotate exposed secrets.
 
@@ -45,6 +52,7 @@ MVP v1 covers:
 - GitHub Actions workflow risk.
 - Generic CI bootstrap templates for GitLab, CircleCI, Azure, and shell-based CI.
 - Deterministic install examples for npm, Yarn, pnpm, Bun, and pip inside generated CI templates.
+- Baseline and delta scans with `new`, `existing`, and `resolved` finding status.
 - Daily local schedule templates for launchd, cron, systemd, and Windows Task Scheduler.
 - Embedded intelligence for compromised Axios, `plain-crypto-js`, TanStack Mini Shai-Hulud indicators, `mistralai`, `guardrails-ai`, and LiteLLM releases.
 - Behavioral detection for lifecycle downloaders, Python `.pth` execution, floating dependency ranges, missing lockfiles including Bun locks, unpinned actions, unsafe `pull_request_target`, privileged untrusted checkout, broad permissions, unsafe OIDC, cache poisoning, and non-deterministic CI installs.

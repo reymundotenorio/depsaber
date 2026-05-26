@@ -100,10 +100,24 @@ func (scanner *Scanner) Scan() (report.Report, error) {
 	}
 
 	sort.Slice(result.Findings, func(i, j int) bool {
-		if result.Findings[i].Severity == result.Findings[j].Severity {
-			return result.Findings[i].ID < result.Findings[j].ID
+		left := result.Findings[i]
+		right := result.Findings[j]
+		if left.Severity != right.Severity {
+			return severityRank(left.Severity) > severityRank(right.Severity)
 		}
-		return severityRank(result.Findings[i].Severity) > severityRank(result.Findings[j].Severity)
+		if left.ID != right.ID {
+			return left.ID < right.ID
+		}
+		if left.File != right.File {
+			return left.File < right.File
+		}
+		if left.PackageName != right.PackageName {
+			return left.PackageName < right.PackageName
+		}
+		if left.Version != right.Version {
+			return left.Version < right.Version
+		}
+		return left.Evidence < right.Evidence
 	})
 	return result, nil
 }
@@ -254,6 +268,20 @@ func (scanner *Scanner) scanRequirements(root string, addFinding func(report.Fin
 		}
 		rel := relPath(root, path)
 		for _, line := range strings.Split(string(content), "\n") {
+			if looksLikeExtraIndexURL(line) {
+				addFinding(report.Finding{
+					ID:          "risk.pypi.extra-index-url",
+					Title:       "Requirements file uses an extra package index",
+					Severity:    report.SeverityLow,
+					Confidence:  "high",
+					Ecosystem:   "pip",
+					File:        rel,
+					Evidence:    strings.TrimSpace(line),
+					Remediation: "Review package index trust boundaries. Remove extra indexes unless required, or isolate private indexes with hash-locked requirements.",
+					References:  []string{"https://pip.pypa.io/en/stable/cli/pip_install/"},
+				})
+				continue
+			}
 			name, version, ok := parsePinnedRequirement(line)
 			if ok {
 				scanner.addKnownPackageFinding("pip", name, version, rel, addFinding)
@@ -445,6 +473,11 @@ func parsePinnedRequirement(line string) (string, string, bool) {
 	name := strings.ToLower(strings.TrimSpace(parts[0]))
 	version := strings.TrimSpace(strings.Split(parts[1], " ")[0])
 	return name, version, name != "" && version != ""
+}
+
+func looksLikeExtraIndexURL(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "--extra-index-url")
 }
 
 func mergeDependencyMaps(maps ...map[string]string) map[string]string {

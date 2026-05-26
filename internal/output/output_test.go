@@ -91,3 +91,83 @@ func TestTextReportIncludesBaselineComparison(t *testing.T) {
 		}
 	}
 }
+
+func TestTextSummaryDetailShowsCountsWithoutEvidenceNoise(t *testing.T) {
+	input := report.Report{Findings: []report.Finding{
+		{
+			ID:          "risk.npm.floating-range",
+			Title:       "Dependency uses a floating version range",
+			Severity:    report.SeverityMedium,
+			Ecosystem:   "npm",
+			File:        "package.json",
+			Evidence:    "left-pad: ^1.3.0",
+			Remediation: "Pin versions.",
+		},
+		{
+			ID:          "risk.pypi.extra-index-url",
+			Title:       "Requirements file uses an extra package index",
+			Severity:    report.SeverityLow,
+			Ecosystem:   "pip",
+			File:        "requirements.txt",
+			Evidence:    "--extra-index-url https://test.pypi.org/simple/",
+			Remediation: "Review package index configuration.",
+		},
+	}}
+
+	rendered := TextWithOptions(input, TextOptions{Detail: DetailSummary})
+	for _, want := range []string{
+		"DepSaber scan summary",
+		"Severity: critical 0, high 0, medium 1, low 1, info 0",
+		"Ecosystems with findings: npm 1, pip 1",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected summary to contain %q, got:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Evidence:") {
+		t.Fatalf("summary detail should not include evidence, got:\n%s", rendered)
+	}
+}
+
+func TestTextNormalDetailGroupsAndLimitsFindings(t *testing.T) {
+	input := report.Report{Findings: []report.Finding{
+		{ID: "risk.npm.floating-range", Title: "Dependency uses a floating version range", Severity: report.SeverityMedium, Ecosystem: "npm", File: "package.json", Evidence: "a: ^1.0.0", Remediation: "Pin versions."},
+		{ID: "risk.npm.floating-range", Title: "Dependency uses a floating version range", Severity: report.SeverityMedium, Ecosystem: "npm", File: "package.json", Evidence: "b: ^1.0.0", Remediation: "Pin versions."},
+		{ID: "risk.npm.floating-range", Title: "Dependency uses a floating version range", Severity: report.SeverityMedium, Ecosystem: "npm", File: "package.json", Evidence: "c: ^1.0.0", Remediation: "Pin versions."},
+	}}
+
+	rendered := TextWithOptions(input, TextOptions{Detail: DetailNormal, Limit: 2})
+	for _, want := range []string{
+		"Top finding types:",
+		"risk.npm.floating-range: 3",
+		"Examples:",
+		"1 more finding(s) hidden. Use --detail full to show everything.",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected normal detail to contain %q, got:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Remediation:") {
+		t.Fatalf("normal detail should stay compact, got:\n%s", rendered)
+	}
+}
+
+func TestTextFullDetailCanUseANSIColors(t *testing.T) {
+	input := report.Report{Findings: []report.Finding{{
+		ID:          "risk.github.pull-request-target",
+		Title:       "Workflow uses pull_request_target",
+		Severity:    report.SeverityHigh,
+		Ecosystem:   "github-actions",
+		File:        ".github/workflows/ci.yml",
+		Evidence:    "pull_request_target",
+		Remediation: "Use pull_request.",
+	}}}
+
+	rendered := TextWithOptions(input, TextOptions{Detail: DetailFull, Color: true})
+	if !strings.Contains(rendered, "\x1b[") {
+		t.Fatalf("expected ANSI color codes, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Remediation: Use pull_request.") {
+		t.Fatalf("full detail should include remediation, got:\n%s", rendered)
+	}
+}

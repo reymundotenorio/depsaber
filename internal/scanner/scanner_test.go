@@ -61,6 +61,18 @@ func TestScanDetectsPackageManagerBehavioralRisks(t *testing.T) {
 	assertFinding(t, report.Findings, "risk.pypi.pth-exec")
 }
 
+func TestScanDetectsPipExtraIndexURL(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "requirements.txt", "--extra-index-url https://test.pypi.org/simple/\nrequests==2.32.0\n")
+
+	report, err := New(Options{Root: root, Feed: intel.BuiltinFeed()}).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertFinding(t, report.Findings, "risk.pypi.extra-index-url")
+}
+
 func TestScanDetectsRiskyGitHubActionsWorkflow(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, ".github/workflows/ci.yml", `name: unsafe

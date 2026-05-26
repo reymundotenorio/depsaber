@@ -28,6 +28,24 @@ func TestScanAcceptsPathBeforeFlags(t *testing.T) {
 	}
 }
 
+func TestScanSupportsTextDetailLevels(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "package.json", `{"dependencies":{"left-pad":"^1.3.0"}}`)
+
+	var stdout bytes.Buffer
+	if err := run([]string{"scan", root, "--detail", "summary"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := stdout.String()
+	if !bytes.Contains([]byte(got), []byte("DepSaber scan summary")) {
+		t.Fatalf("expected summary output, got:\n%s", got)
+	}
+	if bytes.Contains([]byte(got), []byte("Evidence:")) {
+		t.Fatalf("summary output should be concise, got:\n%s", got)
+	}
+}
+
 func TestVersionAndUsageUseDepSaberName(t *testing.T) {
 	var versionOut bytes.Buffer
 	if err := run([]string{"version"}, &versionOut, &bytes.Buffer{}); err != nil {
@@ -41,8 +59,61 @@ func TestVersionAndUsageUseDepSaberName(t *testing.T) {
 	if err := run([]string{"help"}, &usageOut, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := usageOut.String(); !bytes.Contains([]byte(got), []byte("DepSaber supply-chain shield")) || !bytes.Contains([]byte(got), []byte("depsaber scan")) {
+	if got := usageOut.String(); !bytes.Contains([]byte(got), []byte("DepSaber supply-chain shield")) || !bytes.Contains([]byte(got), []byte("depsaber scan")) || !bytes.Contains([]byte(got), []byte("depsaber wizard")) {
 		t.Fatalf("usage should use DepSaber/depsaber branding, got:\n%s", got)
+	}
+}
+
+func TestWizardRequiresInteractiveTerminal(t *testing.T) {
+	err := run([]string{"wizard"}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected wizard to require an interactive terminal")
+	}
+	if !bytes.Contains([]byte(err.Error()), []byte("interactive terminal")) {
+		t.Fatalf("expected interactive terminal error, got: %v", err)
+	}
+}
+
+func TestWizardExecutesReadOnlyScan(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "package.json", `{"dependencies":{"left-pad":"^1.3.0"}}`)
+
+	var stdout bytes.Buffer
+	err := executeWizard(wizardAnswers{
+		ProjectPath:  root,
+		Action:       wizardActionScan,
+		Detail:       "summary",
+		BaselinePath: filepath.FromSlash(".depsaber/baseline.json"),
+		ReportPath:   filepath.FromSlash(".depsaber/report.json"),
+	}, &stdout)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := stdout.String(); !bytes.Contains([]byte(got), []byte("DepSaber wizard")) || !bytes.Contains([]byte(got), []byte("DepSaber scan summary")) {
+		t.Fatalf("expected wizard scan output, got:\n%s", got)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, ".depsaber", "baseline.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("wizard scan should not write a baseline: %v", statErr)
+	}
+}
+
+func TestWizardBaselineRequiresConfirmation(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "package.json", `{"dependencies":{"left-pad":"^1.3.0"}}`)
+
+	err := executeWizard(wizardAnswers{
+		ProjectPath:  root,
+		Action:       wizardActionBaseline,
+		Detail:       "summary",
+		BaselinePath: filepath.FromSlash(".depsaber/baseline.json"),
+		ReportPath:   filepath.FromSlash(".depsaber/report.json"),
+	}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected baseline action to require confirmation")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, ".depsaber", "baseline.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("wizard baseline should not write without confirmation: %v", statErr)
 	}
 }
 

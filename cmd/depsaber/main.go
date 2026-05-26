@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/huh/v2"
+
 	"github.com/depsaber/depsaber/internal/baseline"
 	"github.com/depsaber/depsaber/internal/clean"
 	"github.com/depsaber/depsaber/internal/harden"
@@ -41,6 +43,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "scan":
 		return runScan(args[1:], stdout)
+	case "wizard":
+		return runWizard(args[1:], stdout)
 	case "report":
 		return runReport(args[1:], stdout)
 	case "baseline":
@@ -64,14 +68,220 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 }
 
+type wizardAction string
+
+const (
+	wizardActionScan     wizardAction = "scan"
+	wizardActionBaseline wizardAction = "baseline"
+	wizardActionDelta    wizardAction = "delta"
+	wizardActionReport   wizardAction = "report"
+)
+
+type wizardAnswers struct {
+	ProjectPath     string
+	Action          wizardAction
+	Detail          string
+	BaselinePath    string
+	ReportPath      string
+	Online          bool
+	ConfirmBaseline bool
+}
+
+func runWizard(args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("wizard", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() > 0 {
+		return fmt.Errorf("wizard does not accept path arguments; run depsaber wizard and answer the prompts")
+	}
+	if !isInteractiveTerminal(stdout) {
+		return errors.New("wizard requires an interactive terminal; use depsaber scan . --detail summary for non-interactive runs")
+	}
+
+	answers := wizardAnswers{
+		ProjectPath:  ".",
+		Action:       wizardActionScan,
+		Detail:       string(output.DetailNormal),
+		BaselinePath: filepath.FromSlash(".depsaber/baseline.json"),
+		ReportPath:   filepath.FromSlash(".depsaber/report.json"),
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Project path").
+				Description("Repository or workspace to inspect.").
+				Value(&answers.ProjectPath).
+				Validate(validateExistingPath),
+			huh.NewSelect[wizardAction]().
+				Title("Action").
+				Options(
+					huh.NewOption("Quick scan - read-only terminal summary", wizardActionScan),
+					huh.NewOption("Create baseline - accept current findings", wizardActionBaseline),
+					huh.NewOption("Delta scan - compare against a baseline", wizardActionDelta),
+					huh.NewOption("JSON report - write a viewer-ready file", wizardActionReport),
+				).
+				Value(&answers.Action),
+			huh.NewConfirm().
+				Title("Enable online npm and PyPI age checks?").
+				Description("Offline scanning is faster. Online checks flag very new packages and registry failures.").
+				Affirmative("Enable").
+				Negative("Offline").
+				Value(&answers.Online),
+		),
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Terminal detail").
+				Options(
+					huh.NewOption("Normal - counts, groups, and examples", string(output.DetailNormal)),
+					huh.NewOption("Summary - compact CI-style counts", string(output.DetailSummary)),
+					huh.NewOption("Full - every finding with evidence", string(output.DetailFull)),
+				).
+				Value(&answers.Detail),
+			huh.NewInput().
+				Title("Baseline path").
+				Description("Used by baseline and delta scan actions. Relative paths are inside the project.").
+				Value(&answers.BaselinePath).
+				Validate(validateNonEmpty),
+			huh.NewInput().
+				Title("Report path").
+				Description("Used by the JSON report action. Relative paths are inside the project.").
+				Value(&answers.ReportPath).
+				Validate(validateNonEmpty),
+			huh.NewConfirm().
+				Title("Allow baseline writes when creating a baseline?").
+				Description("Scan and delta actions stay read-only. Baseline writes only when this is enabled.").
+				Affirmative("Allow").
+				Negative("Do not write").
+				Value(&answers.ConfirmBaseline),
+		),
+	).WithTheme(huh.ThemeFunc(huh.ThemeCharm)).WithOutput(stdout)
+
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return errors.New("wizard canceled")
+		}
+		return err
+	}
+
+	return executeWizard(answers, stdout)
+}
+
+func executeWizard(answers wizardAnswers, stdout io.Writer) error {
+	projectPath := strings.TrimSpace(answers.ProjectPath)
+	if projectPath == "" {
+		projectPath = "."
+	}
+	if err := validateExistingPath(projectPath); err != nil {
+		return err
+	}
+
+	baselinePath, err := resolveProjectOutputPath(projectPath, strings.TrimSpace(answers.BaselinePath))
+	if err != nil {
+		return err
+	}
+	reportPath, err := resolveProjectOutputPath(projectPath, strings.TrimSpace(answers.ReportPath))
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "DepSaber wizard")
+	fmt.Fprintf(stdout, "> project: %s\n", projectPath)
+
+	switch answers.Action {
+	case wizardActionScan:
+		fmt.Fprintln(stdout, "> action: read-only scan")
+		return runScan(scanWizardArgs(projectPath, answers.Detail, answers.Online, ""), stdout)
+	case wizardActionBaseline:
+		if !answers.ConfirmBaseline {
+			return errors.New("baseline creation was not confirmed; no files were written")
+		}
+		fmt.Fprintf(stdout, "> action: create baseline at %s\n", baselinePath)
+		args := []string{projectPath, "--apply", "--out", baselinePath}
+		if answers.Online {
+			args = append(args, "--online")
+		}
+		return runBaseline(args, stdout)
+	case wizardActionDelta:
+		if _, err := os.Stat(baselinePath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("baseline file not found at %s; create it with depsaber baseline %s --apply", baselinePath, projectPath)
+			}
+			return err
+		}
+		fmt.Fprintf(stdout, "> action: read-only delta scan against %s\n", baselinePath)
+		return runScan(scanWizardArgs(projectPath, answers.Detail, answers.Online, baselinePath), stdout)
+	case wizardActionReport:
+		fmt.Fprintf(stdout, "> action: write JSON report at %s\n", reportPath)
+		args := []string{projectPath, "--out", reportPath}
+		if answers.Online {
+			args = append(args, "--online")
+		}
+		if _, err := os.Stat(baselinePath); err == nil {
+			args = append(args, "--baseline", baselinePath)
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		return runReport(args, stdout)
+	default:
+		return fmt.Errorf("unsupported wizard action %q", answers.Action)
+	}
+}
+
+func scanWizardArgs(projectPath, detail string, online bool, baselinePath string) []string {
+	args := []string{projectPath, "--detail", detail, "--color", "auto"}
+	if online {
+		args = append(args, "--online")
+	}
+	if baselinePath != "" {
+		args = append(args, "--baseline", baselinePath)
+	}
+	return args
+}
+
+func validateExistingPath(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("path is required")
+	}
+	if _, err := os.Stat(value); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateNonEmpty(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("value is required")
+	}
+	return nil
+}
+
+func isInteractiveTerminal(writer io.Writer) bool {
+	stdinInfo, err := os.Stdin.Stat()
+	if err != nil || stdinInfo.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	file, ok := writer.(*os.File)
+	if !ok {
+		return false
+	}
+	stdoutInfo, err := file.Stat()
+	return err == nil && stdoutInfo.Mode()&os.ModeCharDevice != 0
+}
+
 func runScan(args []string, stdout io.Writer) error {
-	root, flagArgs, err := splitOptionalPath(args, map[string]bool{"format": true, "fail-on": true, "baseline": true, "fail-on-new": true})
+	root, flagArgs, err := splitOptionalPath(args, map[string]bool{"format": true, "detail": true, "color": true, "fail-on": true, "baseline": true, "fail-on-new": true})
 	if err != nil {
 		return err
 	}
 	flags := flag.NewFlagSet("scan", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	format := flags.String("format", "text", "output format: text or json")
+	detail := flags.String("detail", "normal", "text detail: summary, normal, or full")
+	color := flags.String("color", "auto", "text color: auto, always, or never")
 	online := flags.Bool("online", false, "enable live registry metadata checks")
 	failOn := flags.String("fail-on", "", "exit with failure on severity: high or critical")
 	baselinePath := flags.String("baseline", "", "compare findings against a DepSaber baseline file")
@@ -88,7 +298,15 @@ func runScan(args []string, stdout io.Writer) error {
 	if err := applyBaselineIfRequested(&result, *baselinePath); err != nil {
 		return err
 	}
-	rendered, err := render(result, *format)
+	textDetail, err := parseTextDetail(*detail)
+	if err != nil {
+		return err
+	}
+	useColor, err := colorEnabled(stdout, *color)
+	if err != nil {
+		return err
+	}
+	rendered, err := render(result, *format, output.TextOptions{Detail: textDetail, Color: useColor})
 	if err != nil {
 		return err
 	}
@@ -390,14 +608,48 @@ func loadBaseline(path string) (baseline.Snapshot, error) {
 	return snapshot, nil
 }
 
-func render(result report.Report, format string) (string, error) {
+func render(result report.Report, format string, textOptions output.TextOptions) (string, error) {
 	switch format {
 	case "text":
-		return output.Text(result), nil
+		return output.TextWithOptions(result, textOptions), nil
 	case "json":
 		return output.JSON(result)
 	default:
 		return "", fmt.Errorf("unsupported format %q", format)
+	}
+}
+
+func parseTextDetail(value string) (output.TextDetail, error) {
+	switch strings.ToLower(value) {
+	case "", string(output.DetailNormal):
+		return output.DetailNormal, nil
+	case string(output.DetailSummary):
+		return output.DetailSummary, nil
+	case string(output.DetailFull):
+		return output.DetailFull, nil
+	default:
+		return "", fmt.Errorf("unsupported detail level %q", value)
+	}
+}
+
+func colorEnabled(writer io.Writer, mode string) (bool, error) {
+	switch strings.ToLower(mode) {
+	case "", "auto":
+		file, ok := writer.(*os.File)
+		if !ok || os.Getenv("TERM") == "dumb" || os.Getenv("NO_COLOR") != "" {
+			return false, nil
+		}
+		info, err := file.Stat()
+		if err != nil {
+			return false, err
+		}
+		return info.Mode()&os.ModeCharDevice != 0, nil
+	case "always":
+		return true, nil
+	case "never":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported color mode %q", mode)
 	}
 }
 
@@ -514,7 +766,8 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, `DepSaber supply-chain shield
 
 Usage:
-  depsaber scan [path] --format text|json --online --baseline .depsaber/baseline.json --fail-on high|critical --fail-on-new high|critical
+  depsaber wizard
+  depsaber scan [path] --format text|json --detail summary|normal|full --color auto|always|never --online --baseline .depsaber/baseline.json --fail-on high|critical --fail-on-new high|critical
   depsaber baseline [path] --apply --out .depsaber/baseline.json
   depsaber update --source default|file|url
   depsaber harden [path] --apply --policy standard|strict

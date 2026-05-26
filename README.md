@@ -1,8 +1,15 @@
 # DepSaber
 
-DepSaber is a local-first supply-chain shield for developers, AI-assisted coding workflows, and CI systems.
+DepSaber is a local-first supply-chain radar for developers, AI-assisted coding workflows, and CI systems.
 
-It scans dependency files, package-manager configuration, GitHub Actions workflows, and project artifacts for the patterns behind recent npm and PyPI compromises. The goal is practical defense before a known CVE or advisory reaches every scanner.
+It scans dependency files, package-manager configuration, GitHub Actions workflows, and project artifacts for the patterns behind recent npm and PyPI compromises. The goal is practical defense before a known CVE or advisory reaches every scanner: know what changed, accept what is already known, and block the next risky change before install scripts run.
+
+```bash
+depsaber wizard
+depsaber scan . --detail normal
+depsaber baseline . --apply
+depsaber scan . --baseline .depsaber/baseline.json --fail-on-new high
+```
 
 ## Why This Exists
 
@@ -26,7 +33,8 @@ DepSaber does not try to replace mature scanners such as Socket, OSV-Scanner, Sa
 - CI trust-boundary checks inspired by recent GitHub Actions attack chains.
 - Baseline and delta mode so CI can block new high-priority findings without failing on accepted legacy debt.
 - Daily local and CI routines that never mutate a project automatically.
-- A static web report viewer that can be shared without uploading source code.
+- An interactive wizard for first runs, baselines, delta scans, and report generation.
+- A static GitHub Pages report viewer that can be shared without uploading source code.
 
 ## How DepSaber Is Different
 
@@ -38,7 +46,9 @@ Use DepSaber when you want a local repo guardrail: scan, baseline, report, harde
 
 `depsaber scan` is read-only.
 
-`depsaber baseline`, `depsaber harden`, `depsaber clean`, and `depsaber init` require `--apply` before writing files. Apply mode creates backups before changing existing project files when existing files are modified.
+`depsaber report` writes only the requested report file. `depsaber baseline`, `depsaber harden`, `depsaber clean`, and `depsaber init` require `--apply` before writing files. Apply mode creates backups before changing existing project files when existing files are modified.
+
+`depsaber wizard` does not bypass the safety model. Scan and delta actions stay read-only, report generation writes only the requested JSON output, and baseline creation asks for explicit confirmation before calling apply mode.
 
 DepSaber can clean project-level artifacts such as dependency folders, package-manager stores, generated caches, and virtual environments. It cannot guarantee full host compromise remediation after malware executed on a machine. If a credential stealer, RAT, or import-time payload may have run, rebuild the environment and rotate exposed secrets.
 
@@ -52,10 +62,11 @@ MVP v1 covers:
 - GitHub Actions workflow risk.
 - Generic CI bootstrap templates for GitLab, CircleCI, Azure, and shell-based CI.
 - Deterministic install examples for npm, Yarn, pnpm, Bun, and pip inside generated CI templates.
+- Interactive guided CLI flow through `depsaber wizard`.
 - Baseline and delta scans with `new`, `existing`, and `resolved` finding status.
 - Daily local schedule templates for launchd, cron, systemd, and Windows Task Scheduler.
 - Embedded intelligence for compromised Axios, `plain-crypto-js`, TanStack Mini Shai-Hulud indicators, `mistralai`, `guardrails-ai`, and LiteLLM releases.
-- Behavioral detection for lifecycle downloaders, Python `.pth` execution, floating dependency ranges, missing lockfiles including Bun locks, unpinned actions, unsafe `pull_request_target`, privileged untrusted checkout, broad permissions, unsafe OIDC, cache poisoning, and non-deterministic CI installs.
+- Behavioral detection for lifecycle downloaders, Python `.pth` execution, pip extra package indexes, floating dependency ranges, missing lockfiles including Bun locks, unpinned actions, unsafe `pull_request_target`, privileged untrusted checkout, broad permissions, unsafe OIDC, cache poisoning, and non-deterministic CI installs.
 
 ## Build
 
@@ -80,10 +91,25 @@ DEPLOY_TARGET=github-pages npm run build
 
 ## Quick Start
 
+For the first run, use the guided terminal flow:
+
+```bash
+depsaber wizard
+```
+
+The wizard asks for a project path, action, online checks, detail level, baseline path, and report path. It is meant for humans at a terminal; use the commands below for scripts and CI.
+
 Scan the current project:
 
 ```bash
-depsaber scan . --format text
+depsaber scan . --detail normal
+```
+
+Use less or more terminal detail:
+
+```bash
+depsaber scan . --detail summary
+depsaber scan . --detail full --color always
 ```
 
 Create an accepted baseline and fail later only on new high-priority findings:
@@ -104,9 +130,10 @@ Open the static report viewer:
 ```bash
 cd web
 npm run build
+npm run preview
 ```
 
-Then open `web/dist/index.html` and load `.depsaber/report.json` through the file picker.
+Then open the local Vite preview URL and load `.depsaber/report.json` through the file picker. The same viewer is built for GitHub Pages with `DEPLOY_TARGET=github-pages npm run build`.
 
 Update embedded feed output:
 
@@ -121,7 +148,8 @@ External file or URL feeds must be signed. Set `DEPSABER_FEED_PUBLIC_KEY_BASE64`
 ## CLI
 
 ```bash
-depsaber scan [path] --format text|json --online --baseline .depsaber/baseline.json --fail-on high|critical --fail-on-new high|critical
+depsaber wizard
+depsaber scan [path] --format text|json --detail summary|normal|full --color auto|always|never --online --baseline .depsaber/baseline.json --fail-on high|critical --fail-on-new high|critical
 depsaber baseline [path] --apply --out .depsaber/baseline.json
 depsaber update --source default|file|url
 depsaber harden [path] --apply --policy standard|strict
@@ -142,6 +170,16 @@ depsaber scan . --baseline .depsaber/baseline.json --fail-on-new high
 
 `depsaber baseline` scans the project and writes accepted finding fingerprints to `.depsaber/baseline.json`. Later scans mark findings as `new` or `existing`, and report findings that disappeared as `resolved` in the JSON `baseline` summary. `--fail-on-new` requires `--baseline` and ignores accepted findings that are still present.
 
+Text scans default to `--detail normal`, which prints counts, ecosystems with findings, top rule groups, and a short example list. Use `--detail summary` for CI logs and `--detail full` when you need evidence and remediation for every finding. Color is enabled automatically for interactive terminals; use `--color always` or `--color never` to override it.
+
+Use the wizard when you want a friendlier path:
+
+```bash
+depsaber wizard
+```
+
+Choose `Create baseline` once to accept current findings, then choose `Delta scan` later to show only what changed against `.depsaber/baseline.json`.
+
 ## Daily Local Routine
 
 Generate a local schedule template:
@@ -160,7 +198,23 @@ Reports are intended to live under `.depsaber/reports/YYYY-MM-DD.json`.
 
 ## Public Report Viewer
 
-The web viewer is a static Vite app under `web/`. It can be hosted on GitHub Pages without a backend because users load local `.depsaber/report.json` files through the browser file picker.
+The web viewer is a static Vite app under `web/`. It can be hosted on GitHub Pages without a backend because users load local `.depsaber/report.json` files through the browser file picker. The site uses Vite's base path so the sample report works both locally and under `/depsaber/` on GitHub Pages.
+
+Local preview:
+
+```bash
+cd web
+npm run build
+npm run preview
+```
+
+GitHub Pages preview with the `/depsaber/` mount path:
+
+```bash
+cd web
+DEPLOY_TARGET=github-pages npm run build
+npm run preview:pages
+```
 
 GitHub Pages deployment is provided in `.github/workflows/pages.yml`:
 

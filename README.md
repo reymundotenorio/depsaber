@@ -78,10 +78,17 @@ Scan the current project:
 depsaber scan . --format text
 ```
 
+Create an accepted baseline and fail later only on new high-priority findings:
+
+```bash
+depsaber baseline . --apply
+depsaber scan . --baseline .depsaber/baseline.json --fail-on-new high
+```
+
 Generate a JSON report:
 
 ```bash
-depsaber report . --out .depsaber/report.json --online --fail-on high
+depsaber report . --out .depsaber/report.json --online --baseline .depsaber/baseline.json --fail-on-new high
 ```
 
 Open the static report viewer:
@@ -106,14 +113,26 @@ External file or URL feeds must be signed. Set `DEPSABER_FEED_PUBLIC_KEY_BASE64`
 ## CLI
 
 ```bash
-depsaber scan [path] --format text|json --online --fail-on high|critical
+depsaber scan [path] --format text|json --online --baseline .depsaber/baseline.json --fail-on high|critical --fail-on-new high|critical
+depsaber baseline [path] --apply --out .depsaber/baseline.json
 depsaber update --source default|file|url
 depsaber harden [path] --apply --policy standard|strict
 depsaber clean [path] --apply --backup-dir .depsaber/backups
-depsaber report [path] --out .depsaber/report.json
+depsaber report [path] --out .depsaber/report.json --baseline .depsaber/baseline.json --fail-on-new high|critical
 depsaber init schedule --target launchd|cron|systemd|windows-task --time 09:00 --apply
 depsaber init ci --target github|gitlab|circleci|azure|generic --apply
 ```
+
+## Baseline And Delta Mode
+
+Use a baseline when a repo already has known medium-risk debt and CI should block only on new issues:
+
+```bash
+depsaber baseline . --apply
+depsaber scan . --baseline .depsaber/baseline.json --fail-on-new high
+```
+
+`depsaber baseline` scans the project and writes accepted finding fingerprints to `.depsaber/baseline.json`. Later scans mark findings as `new` or `existing`, and report findings that disappeared as `resolved` in the JSON `baseline` summary. `--fail-on-new` requires `--baseline` and ignores accepted findings that are still present.
 
 ## Daily Local Routine
 
@@ -126,7 +145,7 @@ depsaber init schedule --target launchd --time 09:00 --apply
 Recommended daily command:
 
 ```bash
-depsaber update && depsaber scan . --online --format json --fail-on high
+depsaber update && depsaber scan . --online --baseline .depsaber/baseline.json --format json --fail-on-new high
 ```
 
 Reports are intended to live under `.depsaber/reports/YYYY-MM-DD.json`.

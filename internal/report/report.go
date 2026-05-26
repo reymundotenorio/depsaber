@@ -16,6 +16,7 @@ type Finding struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`
 	Severity    Severity `json:"severity"`
+	Status      string   `json:"status,omitempty"`
 	Confidence  string   `json:"confidence"`
 	Ecosystem   string   `json:"ecosystem"`
 	PackageName string   `json:"package,omitempty"`
@@ -24,6 +25,15 @@ type Finding struct {
 	Evidence    string   `json:"evidence"`
 	Remediation string   `json:"remediation"`
 	References  []string `json:"references,omitempty"`
+}
+
+type BaselineSummary struct {
+	Path             string           `json:"path"`
+	New              int              `json:"new"`
+	Existing         int              `json:"existing"`
+	Resolved         int              `json:"resolved"`
+	NewBySeverity    map[Severity]int `json:"newBySeverity,omitempty"`
+	ResolvedFindings []Finding        `json:"resolvedFindings,omitempty"`
 }
 
 type Action struct {
@@ -35,13 +45,14 @@ type Action struct {
 }
 
 type Report struct {
-	SchemaVersion string    `json:"schemaVersion"`
-	ToolVersion   string    `json:"toolVersion"`
-	GeneratedAt   time.Time `json:"generatedAt"`
-	Root          string    `json:"root"`
-	Online        bool      `json:"online"`
-	FeedVersion   string    `json:"feedVersion"`
-	FeedUpdatedAt time.Time `json:"feedUpdatedAt"`
-	Findings      []Finding `json:"findings"`
-	Actions       []Action  `json:"actions,omitempty"`
+	SchemaVersion string           `json:"schemaVersion"`
+	ToolVersion   string           `json:"toolVersion"`
+	GeneratedAt   time.Time        `json:"generatedAt"`
+	Root          string           `json:"root"`
+	Online        bool             `json:"online"`
+	FeedVersion   string           `json:"feedVersion"`
+	FeedUpdatedAt time.Time        `json:"feedUpdatedAt"`
+	Findings      []Finding        `json:"findings"`
+	Baseline      *BaselineSummary `json:"baseline,omitempty"`
+	Actions       []Action         `json:"actions,omitempty"`
 }

@@ -8,10 +8,12 @@ const sampleReport = JSON.parse(readFileSync(resolve("public/sample-report.json"
 
 assert.equal(sampleReport.schemaVersion, "1.0");
 assert.ok(Array.isArray(sampleReport.findings));
+assert.equal(sampleReport.baseline.new, 2);
 assert.ok(sampleReport.findings.some((finding) => finding.id === "risk.github.pull-request-target"));
 assert.match(appSource, /DepSaber MVP v1/);
 assert.match(appSource, /Supply-chain findings/);
 assert.match(appSource, /Daily protection/);
+assert.match(appSource, /resolved/);
 assert.match(appSource, /severity/i);
 assert.match(appSource, /\.depsaber\/report\.json/);
 assert.match(viteConfig, /DEPLOY_TARGET/);

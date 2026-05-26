@@ -63,3 +63,31 @@ func TestTextReportHighlightsSeverityAndRemediation(t *testing.T) {
 		}
 	}
 }
+
+func TestTextReportIncludesBaselineComparison(t *testing.T) {
+	input := report.Report{
+		Findings: []report.Finding{{
+			ID:          "risk.pypi.pth-exec",
+			Title:       "Python .pth file executes code during interpreter startup",
+			Status:      "new",
+			Severity:    report.SeverityCritical,
+			Ecosystem:   "pip",
+			File:        "src/evil.pth",
+			Evidence:    "import urllib",
+			Remediation: "Rebuild the virtual environment.",
+		}},
+		Baseline: &report.BaselineSummary{
+			Path:     ".depsaber/baseline.json",
+			New:      1,
+			Existing: 2,
+			Resolved: 3,
+		},
+	}
+
+	rendered := Text(input)
+	for _, want := range []string{"Baseline comparison: 1 new, 2 existing, 3 resolved", "[NEW CRITICAL]"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected text report to contain %q, got:\n%s", want, rendered)
+		}
+	}
+}

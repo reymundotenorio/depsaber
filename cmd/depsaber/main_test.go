@@ -87,6 +87,73 @@ func TestUpdateRejectsUnsignedExternalFeed(t *testing.T) {
 	}
 }
 
+func TestBaselineRequiresApplyBeforeWriting(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "package.json", `{"dependencies":{"left-pad":"^1.3.0"}}`)
+
+	err := run([]string{"baseline", root}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected baseline to require --apply")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, ".depsaber", "baseline.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("baseline should not write without --apply: %v", statErr)
+	}
+}
+
+func TestScanComparesAgainstBaselineAndFailsOnNewFindings(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "package.json", `{"dependencies":{"left-pad":"^1.3.0"}}`)
+	writeTestFile(t, root, "package-lock.json", `{
+  "name": "fixture",
+  "lockfileVersion": 3,
+  "packages": {
+    "": {"dependencies": {"left-pad": "^1.3.0"}},
+    "node_modules/left-pad": {"version": "1.3.0"}
+  }
+}`)
+	baselinePath := filepath.Join(root, ".depsaber", "baseline.json")
+
+	var baselineOut bytes.Buffer
+	if err := run([]string{"baseline", root, "--apply", "--out", baselinePath}, &baselineOut, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(baselinePath); err != nil {
+		t.Fatalf("expected baseline file: %v", err)
+	}
+
+	writeTestFile(t, root, "src/evil.pth", "import urllib.request\n")
+	var scanOut bytes.Buffer
+	err := run([]string{"scan", root, "--format", "json", "--baseline", baselinePath, "--fail-on-new", "high"}, &scanOut, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected new critical finding to fail --fail-on-new high")
+	}
+
+	var decoded struct {
+		Findings []struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"findings"`
+		Baseline struct {
+			New      int `json:"new"`
+			Existing int `json:"existing"`
+			Resolved int `json:"resolved"`
+		} `json:"baseline"`
+	}
+	if err := json.Unmarshal(scanOut.Bytes(), &decoded); err != nil {
+		t.Fatalf("expected JSON output, got:\n%s", scanOut.String())
+	}
+	if decoded.Baseline.New != 1 || decoded.Baseline.Existing == 0 || decoded.Baseline.Resolved != 0 {
+		t.Fatalf("unexpected baseline summary: %#v", decoded.Baseline)
+	}
+	statuses := map[string]string{}
+	for _, finding := range decoded.Findings {
+		statuses[finding.ID] = finding.Status
+	}
+	if statuses["risk.pypi.pth-exec"] != "new" || statuses["risk.npm.floating-range"] != "existing" {
+		t.Fatalf("unexpected finding statuses: %#v", statuses)
+	}
+}
+
 func writeTestFile(t *testing.T, root, name, content string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))

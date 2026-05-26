@@ -20,11 +20,22 @@ func Text(input report.Report) string {
 	var builder strings.Builder
 	if len(input.Findings) == 0 {
 		builder.WriteString("DepSaber found no supply-chain findings.\n")
+		if input.Baseline != nil {
+			fmt.Fprintf(&builder, "Baseline comparison: %d new, %d existing, %d resolved.\n", input.Baseline.New, input.Baseline.Existing, input.Baseline.Resolved)
+		}
 		return builder.String()
 	}
-	fmt.Fprintf(&builder, "DepSaber found %d supply-chain finding(s).\n\n", len(input.Findings))
+	fmt.Fprintf(&builder, "DepSaber found %d supply-chain finding(s).\n", len(input.Findings))
+	if input.Baseline != nil {
+		fmt.Fprintf(&builder, "Baseline comparison: %d new, %d existing, %d resolved.\n", input.Baseline.New, input.Baseline.Existing, input.Baseline.Resolved)
+	}
+	builder.WriteString("\n")
 	for _, finding := range input.Findings {
-		fmt.Fprintf(&builder, "[%s] %s\n", strings.ToUpper(string(finding.Severity)), finding.Title)
+		label := strings.ToUpper(string(finding.Severity))
+		if finding.Status != "" {
+			label = strings.ToUpper(finding.Status) + " " + label
+		}
+		fmt.Fprintf(&builder, "[%s] %s\n", label, finding.Title)
 		fmt.Fprintf(&builder, "ID: %s\n", finding.ID)
 		fmt.Fprintf(&builder, "Ecosystem: %s\n", finding.Ecosystem)
 		if finding.PackageName != "" {

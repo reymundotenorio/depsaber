@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/depsaber/depsaber/internal/baseline"
 	"github.com/depsaber/depsaber/internal/clean"
 	"github.com/depsaber/depsaber/internal/harden"
 	"github.com/depsaber/depsaber/internal/initgen"
@@ -42,6 +43,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runScan(args[1:], stdout)
 	case "report":
 		return runReport(args[1:], stdout)
+	case "baseline":
+		return runBaseline(args[1:], stdout)
 	case "harden":
 		return runHarden(args[1:], stdout)
 	case "clean":
@@ -62,7 +65,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 }
 
 func runScan(args []string, stdout io.Writer) error {
-	root, flagArgs, err := splitOptionalPath(args, map[string]bool{"format": true, "fail-on": true})
+	root, flagArgs, err := splitOptionalPath(args, map[string]bool{"format": true, "fail-on": true, "baseline": true, "fail-on-new": true})
 	if err != nil {
 		return err
 	}
@@ -71,6 +74,8 @@ func runScan(args []string, stdout io.Writer) error {
 	format := flags.String("format", "text", "output format: text or json")
 	online := flags.Bool("online", false, "enable live registry metadata checks")
 	failOn := flags.String("fail-on", "", "exit with failure on severity: high or critical")
+	baselinePath := flags.String("baseline", "", "compare findings against a DepSaber baseline file")
+	failOnNew := flags.String("fail-on-new", "", "exit with failure on new finding severity: high or critical")
 	if err := flags.Parse(flagArgs); err != nil {
 		return err
 	}
@@ -80,16 +85,22 @@ func runScan(args []string, stdout io.Writer) error {
 	}
 	result.ToolVersion = version
 	result.Online = *online
+	if err := applyBaselineIfRequested(&result, *baselinePath); err != nil {
+		return err
+	}
 	rendered, err := render(result, *format)
 	if err != nil {
 		return err
 	}
 	fmt.Fprint(stdout, rendered)
+	if err := failIfNewNeeded(result, *failOnNew); err != nil {
+		return err
+	}
 	return failIfNeeded(result, *failOn)
 }
 
 func runReport(args []string, stdout io.Writer) error {
-	root, flagArgs, err := splitOptionalPath(args, map[string]bool{"out": true, "fail-on": true})
+	root, flagArgs, err := splitOptionalPath(args, map[string]bool{"out": true, "fail-on": true, "baseline": true, "fail-on-new": true})
 	if err != nil {
 		return err
 	}
@@ -98,6 +109,8 @@ func runReport(args []string, stdout io.Writer) error {
 	out := flags.String("out", ".depsaber/report.json", "report output path")
 	online := flags.Bool("online", false, "enable live registry metadata checks")
 	failOn := flags.String("fail-on", "", "exit with failure on severity: high or critical")
+	baselinePath := flags.String("baseline", "", "compare findings against a DepSaber baseline file")
+	failOnNew := flags.String("fail-on-new", "", "exit with failure on new finding severity: high or critical")
 	if err := flags.Parse(flagArgs); err != nil {
 		return err
 	}
@@ -107,6 +120,9 @@ func runReport(args []string, stdout io.Writer) error {
 	}
 	result.ToolVersion = version
 	result.Online = *online
+	if err := applyBaselineIfRequested(&result, *baselinePath); err != nil {
+		return err
+	}
 	rendered, err := output.JSON(result)
 	if err != nil {
 		return err
@@ -118,7 +134,51 @@ func runReport(args []string, stdout io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(stdout, "Report written to %s\n", *out)
+	if err := failIfNewNeeded(result, *failOnNew); err != nil {
+		return err
+	}
 	return failIfNeeded(result, *failOn)
+}
+
+func runBaseline(args []string, stdout io.Writer) error {
+	root, flagArgs, err := splitOptionalPath(args, map[string]bool{"out": true})
+	if err != nil {
+		return err
+	}
+	flags := flag.NewFlagSet("baseline", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	out := flags.String("out", ".depsaber/baseline.json", "baseline output path")
+	online := flags.Bool("online", false, "enable live registry metadata checks")
+	apply := flags.Bool("apply", false, "write the baseline file")
+	if err := flags.Parse(flagArgs); err != nil {
+		return err
+	}
+	if !*apply {
+		return errors.New("baseline writes files only when --apply is provided")
+	}
+	result, err := scanner.New(scanner.Options{Root: root, Feed: intel.BuiltinFeed(), Online: *online}).Scan()
+	if err != nil {
+		return err
+	}
+	result.ToolVersion = version
+	result.Online = *online
+	snapshot := baseline.NewSnapshot(result)
+	rendered, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return err
+	}
+	outPath, err := resolveProjectOutputPath(root, *out)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(outPath, append(rendered, '\n'), 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Baseline written to %s (%d finding(s)).\n", outPath, len(snapshot.Findings))
+	return nil
 }
 
 func runHarden(args []string, stdout io.Writer) error {
@@ -303,6 +363,33 @@ func loadFeed(source string) (intel.Feed, error) {
 	return intel.VerifySignedFeed(feed, ed25519.PublicKey(publicKey), time.Now().UTC())
 }
 
+func applyBaselineIfRequested(result *report.Report, path string) error {
+	if path == "" {
+		return nil
+	}
+	snapshot, err := loadBaseline(path)
+	if err != nil {
+		return err
+	}
+	baseline.Apply(result, snapshot, path)
+	return nil
+}
+
+func loadBaseline(path string) (baseline.Snapshot, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return baseline.Snapshot{}, err
+	}
+	var snapshot baseline.Snapshot
+	if err := json.Unmarshal(content, &snapshot); err != nil {
+		return baseline.Snapshot{}, err
+	}
+	if snapshot.SchemaVersion == "" {
+		return baseline.Snapshot{}, errors.New("baseline schemaVersion is required")
+	}
+	return snapshot, nil
+}
+
 func render(result report.Report, format string) (string, error) {
 	switch format {
 	case "text":
@@ -312,6 +399,25 @@ func render(result report.Report, format string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported format %q", format)
 	}
+}
+
+func failIfNewNeeded(result report.Report, threshold string) error {
+	if threshold == "" {
+		return nil
+	}
+	if result.Baseline == nil {
+		return errors.New("--fail-on-new requires --baseline")
+	}
+	minimum, err := parseSeverity(threshold)
+	if err != nil {
+		return err
+	}
+	for _, finding := range result.Findings {
+		if finding.Status == "new" && severityRank(finding.Severity) >= severityRank(minimum) {
+			return fmt.Errorf("new finding %s meets fail-on-new threshold %s", finding.ID, threshold)
+		}
+	}
+	return nil
 }
 
 func failIfNeeded(result report.Report, threshold string) error {
@@ -363,6 +469,17 @@ func writeTemplate(template initgen.Template) error {
 	return os.WriteFile(template.Path, []byte(template.Content), 0o644)
 }
 
+func resolveProjectOutputPath(root, out string) (string, error) {
+	if filepath.IsAbs(out) {
+		return out, nil
+	}
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(absoluteRoot, filepath.FromSlash(out)), nil
+}
+
 func splitOptionalPath(args []string, valueFlags map[string]bool) (string, []string, error) {
 	root := "."
 	pathSet := false
@@ -397,13 +514,14 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, `DepSaber supply-chain shield
 
 Usage:
-  depsaber scan [path] --format text|json --online --fail-on high|critical
+  depsaber scan [path] --format text|json --online --baseline .depsaber/baseline.json --fail-on high|critical --fail-on-new high|critical
+  depsaber baseline [path] --apply --out .depsaber/baseline.json
   depsaber update --source default|file|url
   depsaber harden [path] --apply --policy standard|strict
   depsaber clean [path] --apply --backup-dir .depsaber/backups
-  depsaber report [path] --out .depsaber/report.json
+  depsaber report [path] --out .depsaber/report.json --baseline .depsaber/baseline.json --fail-on-new high|critical
   depsaber init schedule --target launchd|cron|systemd|windows-task --time 09:00 --apply
   depsaber init ci --target github|gitlab|circleci|azure|generic --apply
 
-Scan is read-only. Hardening, cleanup, and init commands require --apply before writing files.`)
+Scan is read-only. Baseline, hardening, cleanup, and init commands require --apply before writing files.`)
 }

@@ -6,6 +6,7 @@ type Finding = {
   id: string;
   title: string;
   severity: Severity;
+  status?: "new" | "existing" | "resolved";
   confidence: string;
   ecosystem: string;
   package?: string;
@@ -24,6 +25,14 @@ type DepSaberReport = {
   online: boolean;
   feedVersion: string;
   findings: Finding[];
+  baseline?: {
+    path: string;
+    new: number;
+    existing: number;
+    resolved: number;
+    newBySeverity?: Partial<Record<Severity, number>>;
+    resolvedFindings?: Finding[];
+  };
 };
 
 const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
@@ -56,7 +65,9 @@ export default function App() {
     }
     return next;
   }, [report]);
-  const priorityCount = (counts.get("critical") ?? 0) + (counts.get("high") ?? 0);
+  const priorityCount = report?.baseline
+    ? (report.baseline.newBySeverity?.critical ?? 0) + (report.baseline.newBySeverity?.high ?? 0)
+    : (counts.get("critical") ?? 0) + (counts.get("high") ?? 0);
 
   function loadReportFile(file: File) {
     const reader = new FileReader();
@@ -85,7 +96,7 @@ export default function App() {
           </p>
           <div className="commandStrip" aria-label="recommended command">
             <span>Daily read-only routine</span>
-            <code>depsaber update && depsaber scan . --online --format json --fail-on high</code>
+            <code>depsaber update && depsaber scan . --online --baseline .depsaber/baseline.json --format json --fail-on-new high</code>
           </div>
         </div>
         <aside className="controlDeck" aria-label="report controls">
@@ -95,7 +106,7 @@ export default function App() {
             <span />
           </div>
           <strong>{priorityCount}</strong>
-          <p>high-priority finding(s)</p>
+          <p>{report?.baseline ? "new high-priority finding(s)" : "high-priority finding(s)"}</p>
           <label className="upload">
             <span>Load report JSON</span>
             <input
@@ -147,14 +158,22 @@ export default function App() {
             <p className="eyebrow">Report</p>
             <h2>Supply-chain findings</h2>
           </div>
-          <p>{report ? `${report.findings.length} finding(s) from feed ${report.feedVersion}` : "Loading sample report..."}</p>
+          <p>
+            {report
+              ? report.baseline
+                ? `${report.findings.length} current, ${report.baseline.new} new, ${report.baseline.resolved} resolved`
+                : `${report.findings.length} finding(s) from feed ${report.feedVersion}`
+              : "Loading sample report..."}
+          </p>
         </div>
 
         <div className="findingList">
           {(report?.findings ?? []).map((finding) => (
             <article className="finding" key={`${finding.id}-${finding.file}-${finding.package ?? ""}`}>
               <div className="findingTop">
-                <span className={`badge ${finding.severity}`}>{finding.severity}</span>
+                <span className={`badge ${finding.severity}`}>
+                  {finding.status ? `${finding.status} ${finding.severity}` : finding.severity}
+                </span>
                 <strong>{finding.title}</strong>
               </div>
               <dl>
@@ -196,7 +215,7 @@ export default function App() {
         <p className="eyebrow">Daily protection</p>
         <h2>Run DepSaber locally or in any CI provider.</h2>
         <p>
-          The recommended routine is read-only: <code>depsaber update && depsaber scan . --online --format json --fail-on high</code>.
+          The recommended routine is read-only: <code>depsaber update && depsaber scan . --online --baseline .depsaber/baseline.json --format json --fail-on-new high</code>.
           Cleanup and hardening never run automatically in v1; they require explicit <code>--apply</code>.
         </p>
       </section>

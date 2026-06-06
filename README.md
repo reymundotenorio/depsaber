@@ -1,5 +1,11 @@
 # DepSaber
 
+[![Pages](https://github.com/reymundotenorio/depsaber/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/reymundotenorio/depsaber/actions/workflows/pages.yml)
+[![Release](https://github.com/reymundotenorio/depsaber/actions/workflows/release.yml/badge.svg)](https://github.com/reymundotenorio/depsaber/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/reymundotenorio/depsaber?sort=semver)](https://github.com/reymundotenorio/depsaber/releases/latest)
+![Go version](https://img.shields.io/github/go-mod/go-version/reymundotenorio/depsaber)
+[![Report viewer](https://img.shields.io/badge/report%20viewer-online-71f9e8)](https://reymundotenorio.github.io/depsaber/)
+
 DepSaber is a local-first supply-chain radar for developers, AI-assisted coding workflows, and CI systems.
 
 It scans dependency files, package-manager configuration, GitHub Actions workflows, and project artifacts for the patterns behind recent npm and PyPI compromises. The goal is practical defense before a known CVE or advisory reaches every scanner: know what changed, accept what is already known, and block the next risky change before install scripts run.

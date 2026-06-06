@@ -293,7 +293,8 @@ h3 {
 
 .signalRow,
 .commandBoard,
-.severityGrid {
+.severityGrid,
+.viewerStepGrid {
   display: grid;
   gap: 12px;
 }
@@ -307,6 +308,7 @@ h3 {
 .severityTile,
 .commandCard,
 .sequenceItem,
+.viewerStep,
 .finding {
   border: 1px solid rgba(245, 251, 255, 0.12);
   border-radius: 8px;
@@ -373,6 +375,7 @@ h3 {
 
 .sequenceItem p,
 .commandCard p,
+.viewerStep p,
 .finding p,
 .pagesBand p {
   margin-bottom: 0;
@@ -610,6 +613,20 @@ h3 {
   padding: 26px;
 }
 
+.viewerStepGrid {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.viewerStep {
+  min-height: 132px;
+  padding: 16px;
+}
+
+.viewerStep h3 {
+  color: #f5fbff;
+}
+
 .pagesActions {
   display: flex;
   grid-column: 1 / -1;
@@ -663,6 +680,7 @@ h3 {
   .signalRow,
   .commandBoard,
   .severityGrid,
+  .viewerStepGrid,
   .findingData {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -717,6 +735,7 @@ h3 {
   .signalRow,
   .commandBoard,
   .severityGrid,
+  .viewerStepGrid,
   .findingData {
     grid-template-columns: 1fr;
   }

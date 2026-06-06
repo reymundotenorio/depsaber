@@ -145,6 +145,7 @@ input {
 .sectionGrid,
 .commandBoard,
 .reportConsole,
+.sourcePanel,
 .pagesBand {
   position: relative;
   z-index: 1;
@@ -321,7 +322,8 @@ h3 {
 .severityTile span,
 .commandCard span,
 .findingData span,
-.consoleMeta span {
+.consoleMeta span,
+.sourcePanel span {
   color: #92a4a2;
   font-size: 0.74rem;
   font-weight: 900;
@@ -379,7 +381,7 @@ h3 {
 }
 
 .commandBoard {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 62px;
 }
 
@@ -424,6 +426,17 @@ h3 {
   margin-bottom: 16px;
 }
 
+.consoleIntro {
+  max-width: 720px;
+  margin-bottom: 0;
+  color: #b9c8c7;
+  line-height: 1.62;
+}
+
+.consoleIntro code {
+  margin: 0 0.2rem;
+}
+
 .uploadButton {
   position: relative;
   display: inline-flex;
@@ -436,6 +449,39 @@ h3 {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.sourcePanel {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(113, 249, 232, 0.28);
+  border-radius: 8px;
+  background: rgba(113, 249, 232, 0.08);
+}
+
+.sourcePanel strong {
+  display: block;
+  margin-top: 6px;
+  color: #f5fbff;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.sourcePanel p {
+  max-width: 560px;
+  margin: 0;
+  color: #b9c8c7;
+  line-height: 1.55;
+}
+
+.source-local {
+  border-color: rgba(140, 255, 193, 0.38);
+  background: rgba(140, 255, 193, 0.08);
 }
 
 .consoleMeta {
@@ -564,7 +610,29 @@ h3 {
   padding: 26px;
 }
 
-.pagesBand code {
+.pagesActions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pagesLink {
+  min-height: 40px;
+  padding: 11px 16px;
+  border-radius: 8px;
+  background: #f5fbff;
+  color: #08090d;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.pagesLink:hover {
+  background: #bffff5;
+}
+
+.pagesBand > code {
   grid-column: 1 / -1;
 }
 
@@ -607,7 +675,8 @@ h3 {
   }
 
   .topbar,
-  .consoleHeader {
+  .consoleHeader,
+  .sourcePanel {
     align-items: stretch;
     flex-direction: column;
   }

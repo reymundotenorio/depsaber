@@ -35,35 +35,52 @@ type DepSaberReport = {
   };
 };
 
+type ReportSource = {
+  kind: "sample" | "local";
+  label: string;
+  detail: string;
+};
+
 const severityOrder: Severity[] = ["critical", "high", "medium", "low", "info"];
+const publicViewerUrl = "https://reymundotenorio.github.io/depsaber/";
 
 const commandRows = [
   {
-    label: "Guided first run",
+    label: "Install locally",
+    command: "./scripts/install-local.sh",
+    note: "Build the CLI from this checkout and place depsaber on your PATH for local testing.",
+  },
+  {
+    label: "Guided scan",
     command: "depsaber wizard",
     note: "Pick a workspace, choose scan or baseline, and generate a report without memorizing flags.",
+  },
+  {
+    label: "Export report",
+    command: "depsaber report . --out .depsaber/report.json --online --baseline .depsaber/baseline.json",
+    note: "Write the local JSON file that this static GitHub Pages viewer can open.",
   },
   {
     label: "Quiet CI gate",
     command: "depsaber scan . --baseline .depsaber/baseline.json --fail-on-new high --detail summary",
     note: "Fail only on new high-priority findings instead of inherited dependency debt.",
   },
-  {
-    label: "Pages report",
-    command: "depsaber report . --out .depsaber/report.json --online",
-    note: "Create a local JSON report that this static GitHub Pages viewer can open.",
-  },
 ];
 
 const launchSteps = [
-  ["01", "Scan locally", "Run the wizard or a read-only scan in the repo you already use."],
-  ["02", "Accept reality", "Create a baseline so old medium-risk noise does not hide new attacks."],
-  ["03", "Gate changes", "Block new high-priority findings in CI and publish reports for review."],
+  ["01", "Install or build the CLI", "Use a release binary, go build, or the local installer from this repository."],
+  ["02", "Scan and accept reality", "Run the wizard, create a baseline, and keep inherited findings from hiding new risk."],
+  ["03", "Export a report", "Write .depsaber/report.json and review it in the static viewer without uploading source code."],
 ];
 
 export default function App() {
   const [report, setReport] = useState<DepSaberReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reportSource, setReportSource] = useState<ReportSource>({
+    kind: "sample",
+    label: "Sample report loaded",
+    detail: "This bundled report is an example. It is not scanning your machine or this browser session.",
+  });
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}sample-report.json`)
@@ -118,6 +135,11 @@ export default function App() {
       try {
         const parsed = JSON.parse(String(reader.result)) as DepSaberReport;
         setReport(parsed);
+        setReportSource({
+          kind: "local",
+          label: `Loaded local report: ${file.name}`,
+          detail: "Your browser reads this JSON file locally. DepSaber does not upload reports or source code.",
+        });
         setError(null);
       } catch {
         setError("The selected file is not a valid DepSaber JSON report.");
@@ -178,7 +200,7 @@ $ depsaber wizard
         </aside>
       </section>
 
-      <section className="signalRow" aria-label="Current sample report signals">
+      <section className="signalRow" aria-label="Current report signals">
         <article>
           <span>Current</span>
           <strong>{reportMeta.current}</strong>
@@ -231,10 +253,14 @@ $ depsaber wizard
         <div className="consoleHeader">
           <div>
             <p className="eyebrow">Report console</p>
-            <h2>Load a local .depsaber/report.json file.</h2>
+            <h2>Review a DepSaber report JSON file.</h2>
+            <p className="consoleIntro">
+              Start with the sample below, then run <code>depsaber report</code> in your repo and load{" "}
+              <code>.depsaber/report.json</code> from your machine.
+            </p>
           </div>
           <label className="uploadButton">
-            <span>Load report JSON</span>
+            <span>Load local report</span>
             <input
               type="file"
               accept="application/json,.json"
@@ -246,6 +272,14 @@ $ depsaber wizard
               }}
             />
           </label>
+        </div>
+
+        <div className={`sourcePanel source-${reportSource.kind}`}>
+          <div>
+            <span>Report source</span>
+            <strong>{reportSource.label}</strong>
+          </div>
+          <p>{reportSource.detail}</p>
         </div>
 
         <div className="consoleMeta">
@@ -315,6 +349,12 @@ $ depsaber wizard
           The viewer runs as a static Vite build. GitHub Pages hosts the interface, and teams load their
           own report JSON through the browser file picker so source code and dependency data stay local.
         </p>
+        <div className="pagesActions">
+          <a className="pagesLink" href={publicViewerUrl} target="_blank" rel="noreferrer">
+            Open the public viewer
+          </a>
+          <code>{publicViewerUrl}</code>
+        </div>
         <code>DEPLOY_TARGET=github-pages npm run build</code>
       </section>
     </main>

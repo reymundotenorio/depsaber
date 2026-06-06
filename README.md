@@ -5,11 +5,14 @@ DepSaber is a local-first supply-chain radar for developers, AI-assisted coding 
 It scans dependency files, package-manager configuration, GitHub Actions workflows, and project artifacts for the patterns behind recent npm and PyPI compromises. The goal is practical defense before a known CVE or advisory reaches every scanner: know what changed, accept what is already known, and block the next risky change before install scripts run.
 
 ```bash
+./scripts/install-local.sh
 depsaber wizard
 depsaber scan . --detail normal
 depsaber baseline . --apply
-depsaber scan . --baseline .depsaber/baseline.json --fail-on-new high
+depsaber report . --out .depsaber/report.json --online --baseline .depsaber/baseline.json
 ```
+
+Open the public viewer at https://reymundotenorio.github.io/depsaber/ and use **Load local report** to inspect `.depsaber/report.json`.
 
 ## Why This Exists
 
@@ -125,7 +128,15 @@ Generate a JSON report:
 depsaber report . --out .depsaber/report.json --online --baseline .depsaber/baseline.json --fail-on-new high
 ```
 
-Open the static report viewer:
+Open the public static report viewer:
+
+```text
+https://reymundotenorio.github.io/depsaber/
+```
+
+The page starts with a bundled sample report. Use **Load local report** and select `.depsaber/report.json` from your machine to inspect the report generated for your repo. The browser reads the file locally; the static viewer does not upload reports or source code.
+
+Preview the viewer locally during development:
 
 ```bash
 cd web
@@ -133,7 +144,7 @@ npm run build
 npm run preview
 ```
 
-Then open the local Vite preview URL and load `.depsaber/report.json` through the file picker. The same viewer is built for GitHub Pages with `DEPLOY_TARGET=github-pages npm run build`.
+Then open the local Vite preview URL and load `.depsaber/report.json` through the file picker. The GitHub Pages build uses `DEPLOY_TARGET=github-pages npm run build`.
 
 Update embedded feed output:
 
@@ -200,6 +211,14 @@ Reports are intended to live under `.depsaber/reports/YYYY-MM-DD.json`.
 
 The web viewer is a static Vite app under `web/`. It can be hosted on GitHub Pages without a backend because users load local `.depsaber/report.json` files through the browser file picker. The site uses Vite's base path so the sample report works both locally and under `/depsaber/` on GitHub Pages.
 
+Public URL:
+
+```text
+https://reymundotenorio.github.io/depsaber/
+```
+
+The first report shown on the page is a bundled sample so the interface is not blank. To review a real scan, generate `.depsaber/report.json` with `depsaber report`, open the public viewer, and choose **Load local report**.
+
 Local preview:
 
 ```bash
@@ -223,7 +242,7 @@ GitHub Pages deployment is provided in `.github/workflows/pages.yml`:
 - Pins all GitHub Actions to full commit SHAs.
 - Builds `web/` and deploys `web/dist`.
 
-For repository Pages, the public URL will be:
+For a fork or another repository, the public URL follows this shape:
 
 ```text
 https://<user-or-org>.github.io/depsaber/
@@ -297,6 +316,14 @@ Cleanup quarantines regenerable project artifacts such as `node_modules`, `.venv
 
 ## Install And Release
 
+Published first-phase release:
+
+```text
+https://github.com/reymundotenorio/depsaber/releases/tag/v0.2.0
+```
+
+Download the binary for your platform from the release assets, verify it against `checksums.txt`, then place it somewhere on your `PATH` as `depsaber`.
+
 For local development:
 
 ```bash
@@ -312,11 +339,11 @@ depsaber scan . --format text
 
 By default the installer writes to `$HOME/.local/bin/depsaber`. Set `DEPSABER_INSTALL_DIR` to choose a different install directory.
 
-For releases, push a semantic tag:
+For the next release, push a new semantic tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The release workflow builds:

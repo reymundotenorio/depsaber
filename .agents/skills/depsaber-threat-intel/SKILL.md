@@ -13,6 +13,8 @@ Keep intelligence precise. Do not add vague package names or speculative version
 
 Update both embedded and source feed material when adding durable IOCs unless the feed source-of-truth changes intentionally.
 
+Do not commit real credentials, private keys, registry tokens, cloud keys, or private feed signing keys. Malicious fixtures must use synthetic values, and token-shaped samples must be obviously fake and isolated under `testdata/`.
+
 ## Rule Workflow
 
 Use `references/rule-checklist.md` for each new incident or rule.
@@ -22,6 +24,8 @@ Add tests and fixtures first. Cover at least one malicious fixture and one clean
 Update scanner logic, `internal/intel/feed.go`, `feed/base.json`, README attack coverage, and report viewer sample data when user-facing output changes.
 
 For online checks, registry failures must remain warning-style findings unless a future strict mode explicitly changes that behavior.
+
+Feed signing keys must stay outside the repository. Tests may generate Ed25519 keys in memory, but checked-in feeds must not include private signing material.
 
 ## Verification
 

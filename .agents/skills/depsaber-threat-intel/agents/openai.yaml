@@ -1,4 +1,4 @@
 interface:
   display_name: "DepSaber Threat Intel"
   short_description: "Update DepSaber threat intelligence"
-  default_prompt: "Use this skill when adding new supply-chain incidents, package-manager protections, IOCs, malicious fixtures, or feed rules to DepSaber."
+  default_prompt: "Use this skill when adding new supply-chain incidents, package-manager protections, IOCs, malicious fixtures, feed rules, or threat-intel fixture safety checks to DepSaber."

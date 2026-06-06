@@ -10,4 +10,5 @@ For each new supply-chain incident or IOC, capture:
 - Remediation text: project cleanup, lockfile regeneration, age gate, script blocking, credential rotation, or CI hardening.
 - Tests: malicious fixture, clean fixture, golden text or JSON output when output changes.
 - Feed handling: update `internal/intel/feed.go`, `feed/base.json`, signed feed tests, and freshness expectations when applicable.
+- Sensitive data handling: confirm fixtures and feed material do not include real credentials, private keys, registry tokens, cloud keys, or private feed signing keys.
 - Documentation: update README current coverage, recent attack patterns, limitations, and source references.
